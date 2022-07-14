@@ -6,13 +6,18 @@
 #######################################################################
 
 from monte_carlo_class import MonteCarloOptionPricing
+from datetime import datetime
 
+t = datetime.timestamp(datetime.strptime('20220603-17:06:00',"%Y%m%d-%H:%M:%S"))
+T = datetime.timestamp(datetime.strptime('20220604-20:30:00',"%Y%m%d-%H:%M:%S"))
+
+T = (T-t)/60/60/24/365
 # initialize parameters
-S0 = 40.0  # e.g. spot price = 35
-K = 40.0  # e.g. exercise price = 40
-T = 0.25  # e.g. one year
+S0 = 31000.0  # e.g. spot price = 35
+K = 30467.32  # e.g. exercise price = 40
+T = T  # e.g. one year
 r = 0.08  # e.g. risk free rate = 1%
-sigma = 0.30  # e.g. volatility = 5%
+sigma = 0.7  # e.g. volatility = 5%
 div_yield = 0.0  # e.g. dividend yield = 1%
 no_of_slice = 91  # no. of slices PER YEAR e.g. quarterly adjusted or 252 trading days adjusted
 
