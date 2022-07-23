@@ -305,7 +305,7 @@ class BSMOptionValuation:
         else:
             return exp(-self.r * self.T) * stats.norm.cdf(-self._d2)
 
-    def asset_or_nothing(self, option_type: str) -> float:
+    def binary(self, option_type: str) -> float:
         """
         pays 1 unit of asset (e.g. 1 share) if S0 > K for call (S0 < K for put)
         Parameters
