@@ -1,1 +1,1 @@
-from monte_carlo import monte_carlo_class
+from monte_carlo import monte_carlo_class1

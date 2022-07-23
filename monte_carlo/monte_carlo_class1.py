@@ -12,7 +12,7 @@ from typing import Tuple
 
 class MonteCarloOptionPricing:
     def __init__(self, r, S0: float, K: float, T: float, sigma: float, div_yield: float = 0.0,
-                 simulation_rounds: int = 10000, no_of_slices: int = 4, fix_random_seed: bool or int = False):
+                 simulation_rounds: int = 10000, no_of_slices: int = 4, fix_random_seed: bool or int = False,T_avgStrike = 0.00011415525114155251):
         """
         An important reminder, by default the implementation assumes constant interest rate and volatility.
         To allow for stochastic interest rate and vol, run Vasicek/CIR for stochastic interest rate and
@@ -38,18 +38,23 @@ class MonteCarloOptionPricing:
         self.S0 = float(S0)
         self.K = float(K)
         self.T = float(T)
+        self.T_strike = T_avgStrike
         self.div_yield = float(div_yield)
 
         self.no_of_slices = int(no_of_slices)
         self.simulation_rounds = int(simulation_rounds)
 
         self._dt = self.T / self.no_of_slices
+        self._dt_strike = self.T_strike / self.no_of_slices
 
         self.mue = r  # under risk-neutral measure, asset expected return = risk-free rate
         self.r = np.full((self.simulation_rounds, self.no_of_slices), r * self._dt)
         self.discount_table = np.exp(np.cumsum(-self.r, axis=1))
-
         self.sigma = np.full((self.simulation_rounds, self.no_of_slices), sigma)
+        self.sigma_strike = np.full((self.simulation_rounds, self.no_of_slices), sigma)
+
+        self.r_strike = np.full((self.simulation_rounds, self.no_of_slices), r * self._dt_strike)
+        self.discount_table_strike = np.exp(np.cumsum(-self.r_strike, axis=1))
 
         self.terminal_prices = []
 
@@ -76,6 +81,7 @@ class MonteCarloOptionPricing:
         _interest_z_t = np.random.standard_normal((self.simulation_rounds, self.no_of_slices))
         _interest_array = np.full((self.simulation_rounds, self.no_of_slices), self.r[0, 0] * self._dt)
 
+
         for i in range(1, self.no_of_slices):
             _interest_array[:, i] = b + np.exp(-a / self.no_of_slices) * (_interest_array[:, i - 1] - b) + np.sqrt(
                 sigma_r ** 2 / (2 * a) * (1 - np.exp(-2 * a / self.no_of_slices))
@@ -96,7 +102,7 @@ class MonteCarloOptionPricing:
         """
         assert 2 * a * b > sigma_r ** 2  # Feller condition, to ensure r_t > 0
         _interest_array = np.full((self.simulation_rounds, self.no_of_slices), self.r[0, 0] * self._dt)
-
+        _interest_array_strike = np.full((self.simulation_rounds, self.no_of_slices), self.r_strike[0, 0] * self._dt_strike)
         # CIR non-central chi-square distribution degree of freedom
         _dof = 4 * b * a / sigma_r ** 2
 
@@ -110,10 +116,20 @@ class MonteCarloOptionPricing:
             _interest_array[:, i] = sigma_r ** 2 * (1 - np.exp(-a / self.no_of_slices)) / (
                     4 * a) * _chi_square_factor
 
+            _Lambda_strike = (4 * a * np.exp(-a / self.no_of_slices) * _interest_array_strike[:, i - 1] / (
+                    sigma_r ** 2 * (1 - np.exp(-a / self.no_of_slices))))
+            _chi_square_factor = np.random.noncentral_chisquare(df=_dof,
+                                                                nonc=_Lambda_strike,
+                                                                size=self.simulation_rounds)
+
+            _interest_array_strike[:, i] = sigma_r ** 2 * (1 - np.exp(-a / self.no_of_slices)) / (
+                    4 * a) * _chi_square_factor
+
         # re-define the interest rate array
         self.r = _interest_array
+        self.r_strike =  _interest_array_strike
 
-        return _interest_array
+        return _interest_array,_interest_array_strike
 
     def heston(self, kappa: float, theta: float, sigma_v: float, rho: float = 0.0) -> np.ndarray:
         """
@@ -140,6 +156,8 @@ class MonteCarloOptionPricing:
         _zt = sts.multivariate_normal.rvs(mean=_mu, cov=_cov, size=(self.simulation_rounds, self.no_of_slices))
         _variance_array = np.full((self.simulation_rounds, self.no_of_slices),
                                   self.sigma[0, 0] ** 2)
+        _variance_array_strike = np.full((self.simulation_rounds, self.no_of_slices),
+                                  self.sigma[0, 0] ** 2)
         self.z_t = _zt[:, :, 0]
         _zt_v = _zt[:, :, 1]
 
@@ -152,25 +170,51 @@ class MonteCarloOptionPricing:
             _delta_vt = _drift + _diffusion
             _variance_array[:, i] = _variance_array[:, i - 1] + _delta_vt
 
+            _drift_strike = kappa * (theta - _previous_slice_variance) * self._dt_strike
+            _diffusion_strike = sigma_v * np.sqrt(_previous_slice_variance) * \
+                         _zt_v[:, i - 1] * np.sqrt(self._dt_strike)
+            _delta_vt_strike = _drift_strike + _diffusion_strike
+            _variance_array_strike[:, i] = _variance_array[:, i - 1] + _delta_vt_strike
+
         # re-define the interest rate and volatility path
         self.sigma = np.sqrt(np.maximum(_variance_array, 0))
-        return self.sigma
+        self.sigma_strike = np.sqrt(np.maximum(_variance_array_strike, 0))
+        return self.sigma,self.sigma_strike
 
     def stock_price_simulation(self) -> Tuple[np.ndarray, float]:
         self.exp_mean = (self.mue - self.div_yield - (self.sigma ** 2.0) * 0.5) * self._dt
         self.exp_diffusion = self.sigma * np.sqrt(self._dt)
 
+        self.exp_mean_strike = (self.mue - self.div_yield - (self.sigma_strike ** 2.0) * 0.5) * self._dt_strike
+        self.exp_diffusion_strike = self.sigma_strike * np.sqrt(self._dt_strike)
+
         self.price_array = np.zeros((self.simulation_rounds, self.no_of_slices))
         self.price_array[:, 0] = self.S0
+
+        self.price_array_strike = np.zeros((self.simulation_rounds, self.no_of_slices))
+        self.price_array_strike[:, 0] = self.S0
 
         for i in range(1, self.no_of_slices):
             self.price_array[:, i] = self.price_array[:, i - 1] * np.exp(
                 self.exp_mean[:, i - 1] + self.exp_diffusion[:, i - 1] * self.z_t[:, i - 1]
             )
+            self.price_array_strike[:, i] = self.price_array_strike[:, i - 1] * np.exp(
+                self.exp_mean_strike[:, i - 1] + self.exp_diffusion_strike[:, i - 1] * self.z_t[:, i - 1]
+            )
 
         self.terminal_prices = self.price_array[:, -1]
         self.stock_price_expectation = np.mean(self.terminal_prices)
         self.stock_price_standard_error = np.std(self.terminal_prices) / np.sqrt(len(self.terminal_prices))
+
+        self.terminal_prices_strike = self.price_array_strike[:, -1]
+        self.stock_price_expectation_strike = np.mean(self.terminal_prices_strike)
+        self.stock_price_standard_error_strike = np.std(self.terminal_prices_strike) / np.sqrt(len(self.terminal_prices_strike))
+
+        self.strike_avg = 0
+        for i in range(len(self.price_array_strike)):
+            self.strike_avg += self.price_array_strike[i,:].mean()
+
+        self.strike_avg = self.strike_avg/len(self.price_array_strike)
 
         print('-' * 64)
         print(
@@ -178,6 +222,13 @@ class MonteCarloOptionPricing:
             " Minimum Stock price %4.2f \n Average stock price %4.3f \n Standard Error %4.5f " % (
                 self.simulation_rounds, self.S0, self.K, np.max(self.terminal_prices),
                 np.min(self.terminal_prices), self.stock_price_expectation, self.stock_price_standard_error
+            )
+        )
+        print(
+            " Number of simulations %4.1i \n S0 %4.1f \n K %2.1f \n Maximum Strike price %4.2f \n"
+            " Minimum Strike price %4.2f \n Average strike price %4.3f \n Standard Error %4.5f " % (
+                self.simulation_rounds, self.S0, self.K, np.max(self.terminal_prices_strike),
+                np.min(self.terminal_prices_strike), self.strike_avg, self.stock_price_standard_error_strike
             )
         )
         print('-' * 64)
@@ -304,6 +355,42 @@ class MonteCarloOptionPricing:
         print('-' * 64)
 
         return self.expectation, self.standard_error
+
+    def asian_avg_strike_option(self, avg_method: str = 'arithmetic', option_type: str = 'call') -> Tuple[float, float]:
+        '''
+        数据长度：从开始计算twap的时点开始
+
+        '''
+        assert option_type == 'call' or option_type == 'put', 'option_type must be either call or put'
+        assert len(self.terminal_prices) != 0, 'Please simulate the stock price first'
+        assert avg_method == 'arithmetic' or avg_method == 'geometric', 'arithmetic or geometric average?'
+
+        average_prc = np.average(self.price_array, axis=1)
+
+        if option_type == 'call':
+            self.terminal_profit = np.maximum((average_prc - self.strike_avg), 0.0)
+        elif option_type == 'put':
+            self.terminal_profit = np.maximum((self.strike_avg - average_prc), 0.0)
+
+        if avg_method == 'arithmetic':
+            self.expectation = np.mean(self.terminal_profit * np.exp(-np.sum(self.r, axis=1)))
+        elif avg_method == 'geometric':
+            self.expectation = sts.gmean(self.terminal_profit * np.exp(-np.sum(self.r, axis=1)))
+
+        self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
+
+        print('-' * 64)
+        print(
+            " Asian %s monte carlo arithmetic average \n S0 %4.1f \n K %2.1f \n"
+            " Option Value %4.3f \n Standard Error %4.5f " % (
+                option_type, self.S0, self.K, self.expectation, self.standard_error
+            )
+        )
+        print('-' * 64)
+
+        return self.expectation, self.standard_error
+
+
 
     def american_option_longstaff_schwartz(self, poly_degree: int = 2, option_type: str = 'call') -> \
             Tuple[float, float]:
