@@ -292,7 +292,7 @@ class BSMOptionValuation:
 
         return option_value
 
-    def cash_or_nothing(self, option_type: str) -> float:
+    def binary(self, option_type: str) -> float:
         """
         pays 1 dollar if S0 > K for call (S0 < K for put)
         Parameters
