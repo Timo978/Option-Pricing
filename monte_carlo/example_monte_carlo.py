@@ -58,3 +58,10 @@ MC.european_call()
 #                   parisian_barrier_days=parisian_barrier_days)
 #
 # MC.look_back_european()
+
+import sympy
+
+x, y = sympy.symbols("x y")  # 申明未知数"x"和"y"
+
+a = sympy.solve([3 * x - 2 * y - 3, x + 2 * y - 5], [x, y])  # 写入需要解的方程组
+
