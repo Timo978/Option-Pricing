@@ -22,7 +22,7 @@ class MonteCarloOptionPricing:
         :param K: exercise price
         :param T: time to maturity, in years, can be float
         :param r: interest rate, by default we assume constant interest rate model
-        :param sigma: volatility (in standard deviation) of the asset annual returns
+        :param sigma: annual volatility (in standard deviation) of the asset returns
         :param div_yield: annual dividend yield
         :param simulation_rounds: in general, monte carlo option pricing requires many simulations
         :param no_of_slices: between time 0 and time T, the number of slices PER YEAR, e.g. 252 if trading days are required
