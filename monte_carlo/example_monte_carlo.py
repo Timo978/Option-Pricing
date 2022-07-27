@@ -5,7 +5,7 @@
 # declaration at the top                                              #
 #######################################################################
 
-from monte_carlo.monte_carlo_class1 import MonteCarloOptionPricing
+from monte_carlo.monte_carlo_class import MonteCarloOptionPricing
 from datetime import datetime
 
 t = datetime.timestamp(datetime.strptime('20220603-17:06:00',"%Y%m%d-%H:%M:%S"))
