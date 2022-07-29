@@ -1,16 +1,16 @@
 from tardis_dev import datasets, get_exchange_details
 import os
 from joblib import Parallel,delayed
+from multiprocessing import cpu_count
 
-deribit_details = get_exchange_details("deribit")
+# function used by default if not provided via options
+def default_file_name(exchange, data_type, date, symbol, format):
+    return f"{exchange}_{data_type}_{date.strftime('%Y-%m-%d')}_{symbol}.{format}.gz"
 
-all_symbols = deribit_details['availableSymbols']
 
-options_list = []
-for symbol in all_symbols:
-    if (symbol['type'] == 'option'):
-        options_list.append(symbol)
-    else: pass
+# customized get filename function - saves data in nested directory structure
+def file_name_nested(exchange, data_type, date, symbol, format):
+    return f"{exchange}/{data_type}/{date.strftime('%Y-%m-%d')}_{symbol}.{format}.gz"
 
 def get_options(symbol,start,path):
     datasets.download(
@@ -36,8 +36,21 @@ def get_options(symbol,start,path):
         # get_filename=file_name_nested,
     )
 
+# 下载数据
+deribit_details = get_exchange_details("deribit")
+
+all_symbols = deribit_details['availableSymbols']
+
+options_list = []
+for symbol in all_symbols:
+    if (symbol['type'] == 'option'):
+        options_list.append(symbol)
+    else:
+        pass
+
 path = ''
 if not os.path.exists(path):
     os.mkdir(path)
 
-Parallel(n_jobs=7)(delayed(get_options)(i['id'],i['availableSince'],path)for i in options_list)
+n = cpu_count()
+Parallel(n_jobs = n-1)(delayed(get_options)(i['id'],i['availableSince'],path)for i in options_list)
