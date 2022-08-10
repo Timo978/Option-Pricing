@@ -48,3 +48,4 @@ plt.plot(K, vectorized_black_scholes_merton('c', S0,K, T, r,np.mean(V), q,return
 plt.legend()
 plt.title('Barrier: Heston')
 plt.show()
+
