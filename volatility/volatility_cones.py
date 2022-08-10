@@ -47,7 +47,6 @@ def RV_cones(df,plot,crypto):
     else:
         return np.array([m25,m50,m75,max])
 
-
 RV_cones(df,plot = True,crypto=True)
 
 def rv_quantile(df,plot,crypto):
