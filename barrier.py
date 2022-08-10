@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from py_vollib_vectorized import vectorized_black_scholes_merton
 
 S0 = 30  ### 股价 30
 r = 0.03
@@ -43,7 +44,7 @@ for i in range(0, K.size):
     UOCheston[i] = np.exp(-r * T) * np.mean(np.maximum(ST - K[i], 0) * I)
 
 plt.plot(K, UOCheston, 'o-', label='Heston')
-plt.plot(K, ut.bsVanilla(K, T, 1, S0, r, q, np.mean(V)), '--b', label='stable vol')
+plt.plot(K, vectorized_black_scholes_merton('c', S0,K, T, r,np.mean(V), q,return_as='array'), '--b', label='stable vol')
 plt.legend()
 plt.title('Barrier: Heston')
 plt.show()
