@@ -150,7 +150,7 @@ class ExoticPricing:
         elif barrier_type == "knock-out":
             self.terminal_profit = np.where(barrier_check[-1:] >= 1, 0, self.intrinsic_val[-1, :])
 
-        self.expectation = np.mean(self.terminal_profit * np.exp(-self.r))
+        self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
         self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit[0]))
 
         print('-' * 64)
@@ -165,7 +165,15 @@ class ExoticPricing:
 
         return self.expectation, self.standard_error
 
-
+    def binary_option(self, option_type, payoff,loss):
+        if option_type == 'call':
+            self.terminal_profit = np.where(self.terminal_prices > self.K, payoff, loss)
+            self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
+            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit[0]))
+        else:
+            self.terminal_profit = np.where(self.terminal_prices < self.K, payoff, loss)
+            self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
+            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit[0]))
 
 # Test
 t = datetime.timestamp(datetime.strptime('20210603-00:00:00',"%Y%m%d-%H:%M:%S"))
