@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from py_vollib_vectorized import vectorized_black_scholes_merton
+from typing import Tuple
 
 S0 = 30  ### 股价 30
 r = 0.03
@@ -42,10 +43,24 @@ K = np.linspace(0.8 * S0, B, 10)
 UOCheston = np.zeros(K.shape)
 for i in range(0, K.size):
     UOCheston[i] = np.exp(-r * T) * np.mean(np.maximum(ST - K[i], 0) * I)
+def barrier_option(option_type: str, barrier_price: float, barrier_type: str, barrier_direction: str,
+                   parisian_barrier_days: int or None = None) -> Tuple[float, float]:
+    '''
+    Parameters
+    ----------
+    option_type: 'c','p' for call & put respectively
+    barrier_price: barrier price
+    barrier_type: 'up' or 'down'
+    barrier_direction: 'knock_in' or 'knock_out'
+    parisian_barrier_days
+
+    Returns
+    -------
+
+    '''
 
 plt.plot(K, UOCheston, 'o-', label='Heston')
 plt.plot(K, vectorized_black_scholes_merton('c', S0,K, T, r,np.mean(V), q,return_as='array'), '--b', label='stable vol')
 plt.legend()
 plt.title('Barrier: Heston')
 plt.show()
-
