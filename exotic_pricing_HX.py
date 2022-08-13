@@ -1,10 +1,17 @@
+# -*- coding: utf-8 -*-
+# @Time    : 2022/08/12 17:55
+# @Author  : Timo Yang
+# @Email   : timo_yang@digifinex.org
+# @File    : exotic_pricing.py
+# @Software: PyCharm
+
 import numpy as np
 from datetime import datetime
 from typing import Tuple
 
 class ExoticPricing:
     def __init__(self, r, S0: float, K: float, T: float, sigma: float,
-                 simulation_rounds: int = 10000, npath: int = 4, fix_random_seed: bool or int = False):
+                 simulation_rounds: int = 100, npath: int = 100000, fix_random_seed: bool or int = False):
         '''
         Parameters
         ----------
@@ -13,7 +20,7 @@ class ExoticPricing:
         :param T: time to maturity, in years, can be float
         :param r: interest rate, by default we assume constant interest rate model
         :param sigma: volatility (in standard deviation) of the asset annual returns
-        :param simulation_rounds: in general, monte carlo option pricing requires many simulations
+        :param simulation_rounds: the number of simulation
         :param npath: the lenth of MC simulation
         :param fix_random_seed: boolean or integer
         '''
@@ -75,7 +82,7 @@ class ExoticPricing:
 
         for i in range(1, self.simulation_rounds):
             _ZH = np.random.normal(size=(2, self.npath//2))
-            _ZA = np.c_[_ZH,-_ZH]
+            _ZA = np.c_[_ZH,-_ZH] # antithetic sampling
             _Z = _CH @ _ZA
             _dS = self.r * self.S0 * self._dt + np.sqrt(_V[i-1,:]) * _S[i-1,:] * np.sqrt(self._dt) * _Z[0,:]
             _S[i ,:] = _S[i-1,:] + _dS
