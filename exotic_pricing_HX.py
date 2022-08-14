@@ -191,6 +191,32 @@ class ExoticPricing:
             )
         )
         print('-' * 64)
+        return self.expectation, self.standard_error
+
+    def look_back_european(self, option_type: str = 'call') -> Tuple[float, float]:
+        assert len(self.terminal_prices) != 0, 'Please simulate the stock price first'
+        assert option_type == 'call' or option_type == 'put', 'option_type must be either call or put'
+
+        self.max_price = np.max(self.price_array, axis=0)
+        self.min_price = np.min(self.price_array, axis=0)
+
+        if option_type == "call":
+            self.terminal_profit = np.maximum((self.max_price - self.K), 0.0)
+        elif option_type == "put":
+            self.terminal_profit = np.maximum((self.K - self.min_price), 0.0)
+
+        self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
+        self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
+
+        print('-' * 64)
+        print(
+            " Lookback european %s monte carlo \n S0 %4.1f \n K %2.1f \n"
+            " Option Value %4.3f \n Standard Error %4.5f " % (
+                option_type, self.S0, self.K, self.expectation, self.standard_error
+            )
+        )
+        print('-' * 64)
+        return self.expectation, self.standard_error
 
 # Test
 t = datetime.timestamp(datetime.strptime('20210603-00:00:00',"%Y%m%d-%H:%M:%S"))
