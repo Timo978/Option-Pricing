@@ -445,3 +445,23 @@ class MonteCarloOptionPricing:
         )
         print('-' * 64)
         return self.expectation, self.standard_error
+
+    def binary_option(self, option_type, payoff,loss):
+        if option_type == 'call':
+            self.terminal_profit = np.where(self.terminal_prices > self.K, payoff, loss)
+            self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
+            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
+        else:
+            self.terminal_profit = np.where(self.terminal_prices < self.K, payoff, loss)
+            self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
+            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
+
+        print('-' * 64)
+        print(
+            " Binary european %s \n Payoff: %s \n Loss: %s \n S0 %4.1f \n K %2.1f \n"
+            " Option Value %4.3f \n Standard Error %4.5f " % (
+                option_type, payoff, loss,
+                self.S0, self.K, self.expectation, self.standard_error
+            )
+        )
+        print('-' * 64)

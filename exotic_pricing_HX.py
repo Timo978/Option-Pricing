@@ -91,7 +91,7 @@ class ExoticPricing:
 
         self.price_array = _S
         self.terminal_prices = _S[-1,:]
-        self.stock_price_standard_error = np.std(_S[-1,:]) / np.sqrt(len(_S[-1,:]))
+        self.stock_price_standard_error = np.std(self.terminal_prices) / np.sqrt(len(self.terminal_prices))
         self.sigma = _V
         print('MC price expection:', np.mean(self.terminal_prices),'\nMC price sigma:', self.stock_price_standard_error)
         return np.mean(self.terminal_prices), self.stock_price_standard_error
@@ -106,8 +106,8 @@ class ExoticPricing:
         barrier_price: barrier price
         barrier_type: 'knock_in' or 'knock_out'
         barrier_direction: 'up' or 'down'
-        parisian_barrier_days: a continuously period, barrier options can be excercised only if the time period of
-                               satisfy the barrier condition is longer than it
+        parisian_barrier_days: a continuously period, parisian options can be excercised only if
+                               the underlying price remain higher/below than barrier_price in this 'period' before the excercise day
 
         Returns
         -------
@@ -176,11 +176,21 @@ class ExoticPricing:
         if option_type == 'call':
             self.terminal_profit = np.where(self.terminal_prices > self.K, payoff, loss)
             self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
-            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit[0]))
+            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
         else:
             self.terminal_profit = np.where(self.terminal_prices < self.K, payoff, loss)
             self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
-            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit[0]))
+            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
+
+        print('-' * 64)
+        print(
+            " Binary european %s \n Payoff: %s \n Loss: %s \n S0 %4.1f \n K %2.1f \n"
+            " Option Value %4.3f \n Standard Error %4.5f " % (
+                option_type, payoff, loss,
+                self.S0, self.K, self.expectation, self.standard_error
+            )
+        )
+        print('-' * 64)
 
 # Test
 t = datetime.timestamp(datetime.strptime('20210603-00:00:00',"%Y%m%d-%H:%M:%S"))
@@ -205,15 +215,21 @@ MC = ExoticPricing(S0=S0,
                    sigma=sigma,
                    simulation_rounds=simulation_rounds,
                    npath=npath,
-                   fix_random_seed=500)
+                   fix_random_seed=501)
 
 
 MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
 
-barrier_price= 80.0
-parisian_barrier_days=21
-MC.barrier_option(option_type="call",
-                  barrier_price=barrier_price,
-                  barrier_type="knock-in",
-                  barrier_direction="down",
-                  parisian_barrier_days=parisian_barrier_days)
+# barrier_price= 80.0
+# parisian_barrier_days=21
+# MC.barrier_option(option_type="call",
+#                   barrier_price=barrier_price,
+#                   barrier_type="knock-in",
+#                   barrier_direction="down",
+#                   parisian_barrier_days=parisian_barrier_days)
+
+payoff=25
+loss=-10
+MC.binary_option(option_type = 'call',
+                 payoff = payoff,
+                 loss = loss)
