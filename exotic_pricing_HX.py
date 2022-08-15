@@ -2,7 +2,7 @@
 # @Time    : 2022/08/12 17:55
 # @Author  : Timo Yang
 # @Email   : timo_yang@digifinex.org
-# @File    : exotic_pricing.py
+# @File    : exotic_pricing_HX.py
 # @Software: PyCharm
 
 import numpy as np
@@ -56,9 +56,45 @@ class ExoticPricing:
         elif type(fix_random_seed) is int:
             np.random.seed(fix_random_seed)
 
+    def CIR_model(self, a: float, b: float, sigma_r: float) -> np.ndarray:
+        '''
+        CIR process assumes that the transition Prob Dist. of interest follows a non-central chi-square Dist.
+        The degree of freedom for this chi-square Dist. is 4 * b * a / sigma_r ** 2
+
+        Parameters
+        ----------
+        a: speed of mean-reversion
+        b: long_term mean
+        sigma_r: interest rate volatility (standard deviation)
+
+        Returns
+        -------
+
+        '''
+        assert 2 * a * b > sigma_r ** 2  # Feller condition, to ensure r_t > 0
+        _interest_array = np.full((self.simulation_rounds, self.npath), self.r * self._dt)
+
+        # CIR non-central chi-square distribution degree of freedom
+        _dof = 4 * b * a / sigma_r ** 2
+
+        for i in range(1, self.simulation_rounds):
+            _Lambda = (4 * a * np.exp(-a * self._dt) * _interest_array[i - 1,:] / (
+                    sigma_r ** 2 * (1 - np.exp(-a * self._dt))))
+            _chi_square_factor = np.random.noncentral_chisquare(df=_dof,
+                                                                nonc=_Lambda,
+                                                                size=self.npath)
+
+            _interest_array[i, :] = sigma_r ** 2 * (1 - np.exp(-a * self._dt)) / (
+                    4 * a) * _chi_square_factor
+
+        # re-define the interest rate array
+        self.r = _interest_array
+        return _interest_array
+
     def heston(self, kappa: float, theta: float, sigma_v: float, rho: float = 0.0) -> np.ndarray:
         '''
-        Heston is a classic stochastic vol model, it describes the correlation between the vol of underlying asset and the implied vol of options.
+        Heston is a classic stochastic vol model, assuming the volatility follows Ornstein-Uhlenbeck process(mean-reversion),
+        it describes the correlation between the vol of underlying asset and the implied vol of options.
 
         Parameters
         ----------
@@ -73,16 +109,16 @@ class ExoticPricing:
         '''
 
         _variance_v = sigma_v ** 2
-        assert 2 * kappa * theta > _variance_v  # Feller condition
+        assert 2 * kappa * theta > _variance_v, 'Feller condition is not satisfied, check the parameters!'  # Feller condition
 
         _S = self.S0 * np.ones((self.simulation_rounds,self.npath))
         _V = self.sigma * np.ones((self.simulation_rounds,self.npath))
         _cov = np.array([[1, rho], [rho, 1]])
-        _CH = np.linalg.cholesky(_cov) # cholesky decomposition
+        _CH = np.linalg.cholesky(_cov) # Cholesky decomposition
 
         for i in range(1, self.simulation_rounds):
             _ZH = np.random.normal(size=(2, self.npath//2))
-            _ZA = np.c_[_ZH,-_ZH] # antithetic sampling
+            _ZA = np.c_[_ZH,-_ZH] # Antithetic sampling
             _Z = _CH @ _ZA
             _dS = self.r * self.S0 * self._dt + np.sqrt(_V[i-1,:]) * _S[i-1,:] * np.sqrt(self._dt) * _Z[0,:]
             _S[i ,:] = _S[i-1,:] + _dS
@@ -107,7 +143,7 @@ class ExoticPricing:
         barrier_type: 'knock_in' or 'knock_out'
         barrier_direction: 'up' or 'down'
         parisian_barrier_days: a continuously period, parisian options can be excercised only if
-                               the underlying price remain higher/below than barrier_price in this 'period' before the excercise day
+                               the underlying price remain higher/lower than barrier_price in this 'period' before the excercise day
 
         Returns
         -------
@@ -140,9 +176,6 @@ class ExoticPricing:
                 days_to_slices = int(parisian_barrier_days * MC.simulation_rounds / (MC.T * 365))
                 parisian_barrier_check = np.zeros((MC.simulation_rounds - days_to_slices, MC.npath))
                 for i in range(0, MC.simulation_rounds - days_to_slices):
-                    '''
-                    模拟路径分段，找到是否有生成的价格成功超过/低于巴黎期权设定的时间段
-                    '''
                     parisian_barrier_check[i, :] = np.where(np.sum(barrier_check[i:i + days_to_slices, :], axis=0) >= days_to_slices, 1, 0)
 
                 barrier_check = parisian_barrier_check
@@ -243,9 +276,10 @@ MC = ExoticPricing(S0=S0,
                    npath=npath,
                    fix_random_seed=501)
 
-
+MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
 MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
 
+# barrier
 # barrier_price= 80.0
 # parisian_barrier_days=21
 # MC.barrier_option(option_type="call",
@@ -254,8 +288,12 @@ MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
 #                   barrier_direction="down",
 #                   parisian_barrier_days=parisian_barrier_days)
 
+# binary
 payoff=25
 loss=-10
 MC.binary_option(option_type = 'call',
                  payoff = payoff,
                  loss = loss)
+
+# look back
+MC.look_back_european('call')
