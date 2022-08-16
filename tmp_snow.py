@@ -175,7 +175,7 @@ class ExoticPricing:
             if parisian_barrier_days is not None:
                 days_to_slices = int(parisian_barrier_days * self.simulation_rounds / (self.T * 365))
                 parisian_barrier_check = np.zeros((self.simulation_rounds - days_to_slices, self.npath))
-                for i in range(0, MC.simulation_rounds - days_to_slices):
+                for i in range(0, self.simulation_rounds - days_to_slices):
                     parisian_barrier_check[i, :] = np.where(np.sum(barrier_check[i:i + days_to_slices, :], axis=0) >= days_to_slices, 1, 0)
 
                 barrier_check = parisian_barrier_check
@@ -205,52 +205,6 @@ class ExoticPricing:
 
         return self.expectation, self.standard_error
 
-    def binary_option(self, option_type, payoff,loss):
-        if option_type == 'call':
-            self.terminal_profit = np.where(self.terminal_prices > self.K, payoff, loss)
-            self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
-            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
-        else:
-            self.terminal_profit = np.where(self.terminal_prices < self.K, payoff, loss)
-            self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
-            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
-
-        print('-' * 64)
-        print(
-            " Binary european %s \n Payoff: %s \n Loss: %s \n S0 %4.1f \n K %2.1f \n"
-            " Option Value %4.3f \n Standard Error %4.5f " % (
-                option_type, payoff, loss,
-                self.S0, self.K, self.expectation, self.standard_error
-            )
-        )
-        print('-' * 64)
-        return self.expectation, self.standard_error
-
-    def look_back_european(self, option_type: str = 'call') -> Tuple[float, float]:
-        assert len(self.terminal_prices) != 0, 'Please simulate the stock price first'
-        assert option_type == 'call' or option_type == 'put', 'option_type must be either call or put'
-
-        self.max_price = np.max(self.price_array, axis=0)
-        self.min_price = np.min(self.price_array, axis=0)
-
-        if option_type == "call":
-            self.terminal_profit = np.maximum((self.max_price - self.K), 0.0)
-        elif option_type == "put":
-            self.terminal_profit = np.maximum((self.K - self.min_price), 0.0)
-
-        self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
-        self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
-
-        print('-' * 64)
-        print(
-            " Lookback european %s monte carlo \n S0 %4.1f \n K %2.1f \n"
-            " Option Value %4.3f \n Standard Error %4.5f " % (
-                option_type, self.S0, self.K, self.expectation, self.standard_error
-            )
-        )
-        print('-' * 64)
-        return self.expectation, self.standard_error
-
 # Test
 t = datetime.timestamp(datetime.strptime('20210603-00:00:00',"%Y%m%d-%H:%M:%S"))
 T = datetime.timestamp(datetime.strptime('20220603-00:00:00',"%Y%m%d-%H:%M:%S"))
@@ -276,24 +230,31 @@ MC = ExoticPricing(S0=S0,
                    npath=npath,
                    fix_random_seed=501)
 
-MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
 MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
 
-# barrier
-# barrier_price= 80.0
-# parisian_barrier_days=21
-# MC.barrier_option(option_type="call",
-#                   barrier_price=barrier_price,
-#                   barrier_type="knock-in",
-#                   barrier_direction="down",
-#                   parisian_barrier_days=parisian_barrier_days)
+# 检查时间点
+# 以三个月后开始检查为例
+knock_out_check = [int(3/12/MC._dt) * n for n in range(1,int(T/(3/12)))]
+knock_in_check = np.arange(int(3/12/MC._dt),int(MC.simulation_rounds),int(MC._dt * 365))
 
-# binary
-payoff=25
-loss=-10
-MC.binary_option(option_type = 'call',
-                 payoff = payoff,
-                 loss = loss)
+# 敲出
+# 1. 首先找出所有时点上，价格超过knock out点的路径
+knock_out_indicator = np.where(MC.price_array > S0 * 1.3, 1, 0)
 
-# look back
-MC.look_back_european('call')
+# 2. 筛选出在检查时间点上超过knock out点的路径
+tmp = np.zeros([1,npath])
+
+tmp25 = np.where((knock_out_indicator[25,:] == 1), 1, 0)
+tmp25 = (list(tmp25)).count(1)
+
+tmp50 = np.where((knock_out_indicator[50,:] == 1) & (knock_out_indicator[25,:] == 0), 1, 0)
+tmp50 = (list(tmp50)).count(1)
+
+tmp75 = np.where((knock_out_indicator[75,:] == 1) & (knock_out_indicator[25,:] == 0) & (knock_out_indicator[50,:] == 0), 1, 0)
+tmp75 = (list(tmp75)).count(1)
+
+# 3. 计算总收益
+terminal_profit1 = tmp25 * 90/365 * 10000 * 0.25 + tmp50 * 180/365 * 10000 * 0.25 + tmp25 * 270/365 * 10000 * 0.25
+# expection1 = (tmp25 * 90/365 * 10000 * 0.25 * np.exp(-MC.r * 90/365) +\
+#              tmp50 * 180/365 * 10000 * 0.25 * np.exp(-MC.r * 180/365) +\
+#              tmp25 * 270/365 * 10000 * 0.25 * np.exp(-MC.r * 270/365)) /
