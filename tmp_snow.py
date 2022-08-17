@@ -235,12 +235,12 @@ MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
 # 检查时间点
 # 以三个月后开始检查为例
 knock_out_check = np.arange(int(3/12/MC._dt),
-                           int(MC.simulation_rounds),
-                           int(1/(MC._dt * 12)))
+                            int(MC.simulation_rounds),
+                            int(1/(MC._dt * 12)))
 
-knock_in_check = np.arange(int(3/12/MC._dt),
+knock_in_check = np.arange(int(0),
                            int(MC.simulation_rounds),
-                           int(1/(MC._dt * 12 * 30))) # simulation rounds至少要到1000才较为精确
+                           int(1/(MC._dt * 365))) # simulation rounds至少要到1000才较为精确
 
 # 敲出
 # 1. 首先找出所有时点上，价格超过knock out点的路径
@@ -258,9 +258,7 @@ tmp75 = (list(tmp75)).count(1)
 
 # 3. 计算总收益
 terminal_profit1 = tmp25 * 90/365 * 10000 * 0.25 + tmp50 * 180/365 * 10000 * 0.25 + tmp25 * 270/365 * 10000 * 0.25
-expection1 = (tmp25 * 90/365 * 10000 * 0.25 * np.exp(-MC.r * 90/365) +\
-             tmp50 * 180/365 * 10000 * 0.25 * np.exp(-MC.r * 180/365) +\
-             tmp25 * 270/365 * 10000 * 0.25 * np.exp(-MC.r * 270/365)) / (tmp25 + tmp50 + tmp75)
+expection1 = tmp25 * 90/365 * 10000 * 0.25 * np.exp(-r * 90/365) + tmp50 * 180/365 * 10000 * np.exp(-r * 180/365) + tmp25 * 270/365 * 10000 * 0.25 * np.exp(-r * 270/365)
 
 # 未发生敲入敲出
 # 1. 首先找出所有时点上，价格小于knock out且大于knock in点的路径
@@ -274,3 +272,24 @@ for i in range(0,between_indicator.shape[1]):
     else:pass
 
 terminal_profit2 = 10000 * 0.25 * count
+expection2 = terminal_profit2 * np.exp(-r * T)
+
+# 发生敲入，且到期价格落在初始和敲出价格区间之内,获利0元
+indicator = np.zeros([1,MC.npath])
+for i in range(MC.price_array.shape[1]):
+    if ((MC.price_array[[knock_in_check],i]).any() < S0*0.8) & (S0<MC.price_array[-1,i]<S0*1.3):
+        indicator[0,i] = int(1)
+    else:pass
+expection3 = 0
+
+# 发生敲入，且到期价格低于期初价格,亏损(ST/S0 - 1)*本金
+indicator2 = np.zeros([1,MC.npath])
+for i in range(MC.price_array.shape[1]):
+    if ((MC.price_array[[knock_in_check],i]).any() < S0*0.8) & (MC.price_array[-1,i]<S0):
+        indicator2[0,i] = int(1)
+    else:pass
+terminal_profit4 = (indicator2 * MC.price_array[-1,:]/S0 - 1) * 10000
+terminal_profit4 = np.where(terminal_profit4 == -10000.00000,0,terminal_profit4)
+expection4 = np.sum(terminal_profit4 * np.exp(-r * T))
+
+expection = np.mean(expection1 + expection2 + expection3 + expection4)
