@@ -217,13 +217,82 @@ class ExoticPricing:
 
         return self.expectation, self.standard_error
 
+    def snowball(self,knock_in_prc,knock_in_check, knock_out_prc,knock_out_check,):
+        knock_out_check = np.arange(int(knock_out_check / 12 / self._dt),
+                                    int(self.simulation_rounds),
+                                    int(1 / (self._dt * 12)))
+
+        knock_in_check = np.arange(int(0),
+                                   int(self.simulation_rounds),
+                                   int(1 / (self._dt * 365)))
+        # 敲出
+        # 1. 首先找出所有时点上，价格超过knock out点的路径
+        knock_out_indicator = np.where(MC.price_array > S0 * 1.3, 1, 0)
+
+        # 2. 筛选出在检查时间点上超过knock out点的路径
+        tmp25 = np.where((knock_out_indicator[25, :] == 1), 1, 0)
+        tmp25 = (list(tmp25)).count(1)
+
+        tmp50 = np.where((knock_out_indicator[50, :] == 1) & (knock_out_indicator[25, :] == 0), 1, 0)
+        tmp50 = (list(tmp50)).count(1)
+
+        tmp75 = np.where(
+            (knock_out_indicator[75, :] == 1) & (knock_out_indicator[25, :] == 0) & (knock_out_indicator[50, :] == 0),
+            1, 0)
+        tmp75 = (list(tmp75)).count(1)
+
+        # 3. 计算总收益
+        terminal_profit1 = tmp25 * 90 / 365 * 10000 * 0.25 + tmp50 * 180 / 365 * 10000 * 0.25 + tmp25 * 270 / 365 * 10000 * 0.25
+        expection1 = tmp25 * 90 / 365 * 10000 * 0.25 * np.exp(-r * 90 / 365) + tmp50 * 180 / 365 * 10000 * np.exp(
+            -r * 180 / 365) + tmp25 * 270 / 365 * 10000 * 0.25 * np.exp(-r * 270 / 365)
+
+        # 未发生敲入敲出
+        # 1. 首先找出所有时点上，价格小于knock out且大于knock in点的路径
+        between_indicator = np.where((MC.price_array < S0 * 1.3) & (S0 * 0.8 < MC.price_array), 1, 0)
+
+        # 2. 符合此条件的路径，收益都相同，为持有一年获得的利润
+        count = 0
+        for i in range(0, between_indicator.shape[1]):
+            if between_indicator[25:, i].all() == 1:
+                count += 1
+            else:
+                pass
+
+        terminal_profit2 = 10000 * 0.25 * count
+        expection2 = terminal_profit2 * np.exp(-r * T)
+
+        # 发生敲入，且到期价格落在初始和敲出价格区间之内,获利0元
+        indicator = np.zeros([1, MC.npath])
+        for i in range(MC.price_array.shape[1]):
+            if ((MC.price_array[[knock_in_check], i]).any() < S0 * 0.8) & (S0 < MC.price_array[-1, i] < S0 * 1.3):
+                indicator[0, i] = int(1)
+            else:
+                pass
+        expection3 = 0
+
+        # 发生敲入，且到期价格低于期初价格,亏损(ST/S0 - 1)*本金
+        indicator2 = np.zeros([1, MC.npath])
+        for i in range(MC.price_array.shape[1]):
+            if ((MC.price_array[[knock_in_check], i]).any() < S0 * 0.8) & (MC.price_array[-1, i] < S0):
+                indicator2[0, i] = int(1)
+            else:
+                pass
+        terminal_price = indicator2 * MC.price_array[-1, :]
+        terminal_price = terminal_price[terminal_price != 0]
+        terminal_profit4 = (terminal_price / S0 - 1) * 10000
+        terminal_profit4 = np.where(terminal_profit4 == -10000.00000, 0, terminal_profit4)
+        expection4 = np.sum(terminal_profit4 * np.exp(-r * T))
+
+        expection = np.mean(expection1 + expection2 + expection3 + expection4)
+
+
 # Test
 t = datetime.timestamp(datetime.strptime('20210603-00:00:00',"%Y%m%d-%H:%M:%S"))
 T = datetime.timestamp(datetime.strptime('20220603-00:00:00',"%Y%m%d-%H:%M:%S"))
 T = (T-t)/60/60/24/365
 
 # initialize parameters
-S0 = 35 # e.g. spot price = 35
+S0 = 6500 # e.g. spot price = 35
 K = 40  # e.g. exercise price = 40
 T = T  # e.g. one year
 r = 0.01  # e.g. risk free rate = 1%
@@ -240,9 +309,9 @@ MC = ExoticPricing(S0=S0,
                    sigma=sigma,
                    simulation_rounds=simulation_rounds,
                    npath=npath,
-                   fix_random_seed=501)
+                   fix_random_seed=502)
 
-MC.heston(plot = False, kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+MC.heston(plot = True, kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
 
 # 检查时间点
 # 以三个月后开始检查为例
