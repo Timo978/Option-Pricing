@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+# @Time    : 2022/08/12 17:55
+# @Author  : Timo Yang
+# @Email   : timo_yang@digifinex.org
+# @File    : exotic_pricing_HX.py
+# @Software: PyCharm
+
 import numpy as np
 from datetime import datetime
 from typing import Tuple
@@ -105,31 +112,35 @@ class ExoticPricing:
         _variance_v = sigma_v ** 2
         assert 2 * kappa * theta > _variance_v, 'Feller condition is not satisfied, check the parameters!'  # Feller condition
 
-        _S = self.S0 * np.ones((self.simulation_rounds,self.npath))
-        _V = self.sigma * np.ones((self.simulation_rounds,self.npath))
+        _S = self.S0 * np.ones((self.simulation_rounds, self.npath))
+        _V = self.sigma * np.ones((self.simulation_rounds, self.npath))
         _cov = np.array([[1, rho], [rho, 1]])
-        _CH = np.linalg.cholesky(_cov) # Cholesky decomposition
+        _CH = np.linalg.cholesky(_cov)  # Cholesky decomposition
 
         for i in range(1, self.simulation_rounds):
-            _ZH = np.random.normal(size=(2, self.npath//2))
-            _ZA = np.c_[_ZH,-_ZH] # Antithetic sampling
+            _ZH = np.random.normal(size=(2, self.npath // 2))
+            _ZA = np.c_[_ZH, -_ZH]  # Antithetic sampling
             _Z = _CH @ _ZA
-            _dS = self.r * self.S0 * self._dt + np.sqrt(_V[i-1,:]) * _S[i-1,:] * np.sqrt(self._dt) * _Z[0,:]
-            _S[i ,:] = _S[i-1,:] + _dS
-            _dV = kappa * (theta - _V[i-1, :]) * self._dt + sigma_v * np.sqrt(_V[i-1, :]) * np.sqrt(self._dt) * _Z[1, :]
-            _V[i, :] = np.maximum(_V[i-1, :] + _dV, 0)
+            _dS = self.r * self.S0 * self._dt + np.sqrt(_V[i - 1, :]) * _S[i - 1, :] * np.sqrt(self._dt) * _Z[0, :]
+            _S[i, :] = _S[i - 1, :] + _dS
+            _dV = kappa * (theta - _V[i - 1, :]) * self._dt + sigma_v * np.sqrt(_V[i - 1, :]) * np.sqrt(self._dt) * _Z[
+                                                                                                                    1,
+                                                                                                                    :]
+            _V[i, :] = np.maximum(_V[i - 1, :] + _dV, 0)
 
         self.price_array = _S
-        self.terminal_prices = _S[-1,:]
+        self.terminal_prices = _S[-1, :]
         self.stock_price_standard_error = np.std(self.terminal_prices) / np.sqrt(len(self.terminal_prices))
         self.sigma = _V
-        print('MC price expection:', np.mean(self.terminal_prices),'\nMC price sigma:', self.stock_price_standard_error)
+        print('MC price expection:', np.mean(self.terminal_prices), '\nMC price sigma:',
+              self.stock_price_standard_error)
 
         if plot == True:
             fig = plt.figure(figsize=(28, 16))
             plt.plot(np.arange(0, 1000), self.price_array)
             plt.show()
-        else:pass
+        else:
+            pass
 
         return np.mean(self.terminal_prices), self.stock_price_standard_error
 
@@ -217,10 +228,10 @@ K = 40  # e.g. exercise price = 40
 T = T  # e.g. one year
 r = 0.01  # e.g. risk free rate = 1%
 sigma = 0.5  # e.g. volatility = 5%
-npath = 10000
+npath = 10000  # no. of slices PER YEAR e.g. quarterly adjusted or 252 trading days adjusted
 
 # optional parameter
-simulation_rounds = int(1000)
+simulation_rounds = int(1000)  # For monte carlo simulation, a large number of simulations required
 
 MC = ExoticPricing(S0=S0,
                    K=K,
@@ -231,15 +242,23 @@ MC = ExoticPricing(S0=S0,
                    npath=npath,
                    fix_random_seed=501)
 
-MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+MC.heston(plot = False, kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
 
-knock_out_check = np.arange(int(3/12/MC._dt),int(MC.simulation_rounds),int(1/(MC._dt * 12)))
-knock_in_check = np.arange(int(0),int(MC.simulation_rounds),int(1/(MC._dt * 365)))
+# 检查时间点
+# 以三个月后开始检查为例
+knock_out_check = np.arange(int(3/12/MC._dt),
+                            int(MC.simulation_rounds),
+                            int(1/(MC._dt * 12)))
 
-prc = MC.price_array
+knock_in_check = np.arange(int(0),
+                           int(MC.simulation_rounds),
+                           int(1/(MC._dt * 365))) # simulation rounds至少要到1000才较为精确
 
+# 敲出
+# 1. 首先找出所有时点上，价格超过knock out点的路径
 knock_out_indicator = np.where(MC.price_array > S0 * 1.3, 1, 0)
 
+# 2. 筛选出在检查时间点上超过knock out点的路径
 tmp25 = np.where((knock_out_indicator[25,:] == 1), 1, 0)
 tmp25 = (list(tmp25)).count(1)
 
@@ -249,24 +268,42 @@ tmp50 = (list(tmp50)).count(1)
 tmp75 = np.where((knock_out_indicator[75,:] == 1) & (knock_out_indicator[25,:] == 0) & (knock_out_indicator[50,:] == 0), 1, 0)
 tmp75 = (list(tmp75)).count(1)
 
+# 3. 计算总收益
+terminal_profit1 = tmp25 * 90/365 * 10000 * 0.25 + tmp50 * 180/365 * 10000 * 0.25 + tmp25 * 270/365 * 10000 * 0.25
+expection1 = tmp25 * 90/365 * 10000 * 0.25 * np.exp(-r * 90/365) + tmp50 * 180/365 * 10000 * np.exp(-r * 180/365) + tmp25 * 270/365 * 10000 * 0.25 * np.exp(-r * 270/365)
+
+# 未发生敲入敲出
+# 1. 首先找出所有时点上，价格小于knock out且大于knock in点的路径
+between_indicator = np.where((MC.price_array < S0 * 1.3) & (S0 * 0.8 < MC.price_array), 1, 0)
+
+# 2. 符合此条件的路径，收益都相同，为持有一年获得的利润
+count = 0
+for i in range(0,between_indicator.shape[1]):
+    if between_indicator[25:,i].all()==1:
+        count += 1
+    else:pass
+
+terminal_profit2 = 10000 * 0.25 * count
+expection2 = terminal_profit2 * np.exp(-r * T)
+
 # 发生敲入，且到期价格落在初始和敲出价格区间之内,获利0元
 indicator = np.zeros([1,MC.npath])
-for i in range(prc.shape[1]):
-    if ((prc[[knock_in_check],i]).any() < S0*0.8) & (S0<prc[-1,i]<S0*1.3):
+for i in range(MC.price_array.shape[1]):
+    if ((MC.price_array[[knock_in_check],i]).any() < S0*0.8) & (S0<MC.price_array[-1,i]<S0*1.3):
         indicator[0,i] = int(1)
     else:pass
+expection3 = 0
 
 # 发生敲入，且到期价格低于期初价格,亏损(ST/S0 - 1)*本金
 indicator2 = np.zeros([1,MC.npath])
-for i in range(prc.shape[1]):
-    if ((prc[[knock_in_check],i]).any() < S0*0.8) & (prc[-1,i]<S0):
+for i in range(MC.price_array.shape[1]):
+    if ((MC.price_array[[knock_in_check],i]).any() < S0*0.8) & (MC.price_array[-1,i]<S0):
         indicator2[0,i] = int(1)
     else:pass
-terminal_profit = (indicator2 * MC.price_array[-1,:]/S0 - 1) * 10000
-terminal_profit = np.where(terminal_profit == -10000.00000,0,terminal_profit)
-fig = plt.figure(figsize = (28,16))
-plt.plot(np.arange(0,1000),prc)
-plt.plot(np.arange(0,1000),[S0*1.3]*1000,label = 'knock_out',color = 'black')
-plt.plot(np.arange(0,1000),[S0*0.8]*1000,label = 'knock_in',color = 'black')
-plt.legend()
-plt.show()
+terminal_price = indicator2 * MC.price_array[-1,:]
+terminal_price = terminal_price[terminal_price!=0]
+terminal_profit4 = (terminal_price/S0 - 1) * 10000
+terminal_profit4 = np.where(terminal_profit4 == -10000.00000,0,terminal_profit4)
+expection4 = np.sum(terminal_profit4 * np.exp(-r * T))
+
+expection = np.mean(expection1 + expection2 + expection3 + expection4)
