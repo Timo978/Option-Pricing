@@ -219,7 +219,7 @@ sigma = 0.5  # e.g. volatility = 5%
 npath = 10000  # no. of slices PER YEAR e.g. quarterly adjusted or 252 trading days adjusted
 
 # optional parameter
-simulation_rounds = int(100)  # For monte carlo simulation, a large number of simulations required
+simulation_rounds = int(1000)  # For monte carlo simulation, a large number of simulations required
 
 MC = ExoticPricing(S0=S0,
                    K=K,
@@ -234,16 +234,19 @@ MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
 
 # 检查时间点
 # 以三个月后开始检查为例
-knock_out_check = [int(3/12/MC._dt) * n for n in range(1,int(T/(3/12)))]
-knock_in_check = np.arange(int(3/12/MC._dt),int(MC.simulation_rounds),int(MC._dt * 365))
+knock_out_check = np.arange(int(3/12/MC._dt),
+                           int(MC.simulation_rounds),
+                           int(1/(MC._dt * 12)))
+
+knock_in_check = np.arange(int(3/12/MC._dt),
+                           int(MC.simulation_rounds),
+                           int(1/(MC._dt * 12 * 30))) # simulation rounds至少要到1000才较为精确
 
 # 敲出
 # 1. 首先找出所有时点上，价格超过knock out点的路径
 knock_out_indicator = np.where(MC.price_array > S0 * 1.3, 1, 0)
 
 # 2. 筛选出在检查时间点上超过knock out点的路径
-tmp = np.zeros([1,npath])
-
 tmp25 = np.where((knock_out_indicator[25,:] == 1), 1, 0)
 tmp25 = (list(tmp25)).count(1)
 
@@ -258,3 +261,16 @@ terminal_profit1 = tmp25 * 90/365 * 10000 * 0.25 + tmp50 * 180/365 * 10000 * 0.2
 expection1 = (tmp25 * 90/365 * 10000 * 0.25 * np.exp(-MC.r * 90/365) +\
              tmp50 * 180/365 * 10000 * 0.25 * np.exp(-MC.r * 180/365) +\
              tmp25 * 270/365 * 10000 * 0.25 * np.exp(-MC.r * 270/365)) / (tmp25 + tmp50 + tmp75)
+
+# 未发生敲入敲出
+# 1. 首先找出所有时点上，价格小于knock out且大于knock in点的路径
+between_indicator = np.where((MC.price_array < S0 * 1.3) & (S0 * 0.8 < MC.price_array), 1, 0)
+
+# 2. 符合此条件的路径，收益都相同，为持有一年获得的利润
+count = 0
+for i in range(0,between_indicator.shape[1]):
+    if between_indicator[25:,i].all()==1:
+        count += 1
+    else:pass
+
+terminal_profit2 = 10000 * 0.25 * count
