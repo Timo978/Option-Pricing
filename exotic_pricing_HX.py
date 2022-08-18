@@ -251,6 +251,30 @@ class ExoticPricing:
         print('-' * 64)
         return self.expectation, self.standard_error
 
+    def snowball(self, KO_Barrier, KO_Coupon, KI_Barrier, Bonus_Coupon):
+
+        self.price_trajectories = []
+
+        for i in range(self.npath):
+            _n = int(1.0 / self._dt / 12.0)  # number of time points in every month
+            _s = np.arange(int(_n * 3), self.simulation_rounds, int(self.simulation_rounds/12))
+            _stockprices_slice = self.price_array[_s, i]
+            if _stockprices_slice.max() >= KO_Barrier:
+                idx = np.argmax(_stockprices_slice >= KO_Barrier)
+                time_to_KO = (idx + 1) / 12.0
+                pv = (KO_Coupon * time_to_KO + 1) * np.exp(-r * time_to_KO)
+                self.price_trajectories.append(pv)
+                continue
+
+            # if no KO, bonus coupon or down in put
+            _stockprices = self.price_array[:,i]
+            indicator_KI = _stockprices.min() <= KI_Barrier
+            pv = ((1 - indicator_KI) * (Bonus_Coupon * T + 1) + indicator_KI * (_stockprices[-1] - K + 1)) * np.exp(-r * T)
+            self.price_trajectories.append(pv)
+
+        _option_price = np.sum(self.price_trajectories) / self.npath
+        return _option_price
+
 # Test
 t = datetime.timestamp(datetime.strptime('20210603-00:00:00',"%Y%m%d-%H:%M:%S"))
 T = datetime.timestamp(datetime.strptime('20220603-00:00:00',"%Y%m%d-%H:%M:%S"))
