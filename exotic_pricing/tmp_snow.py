@@ -217,73 +217,29 @@ class ExoticPricing:
 
         return self.expectation, self.standard_error
 
-    def snowball(self,knock_in_prc,knock_in_check, knock_out_prc,knock_out_check,):
-        knock_out_check = np.arange(int(knock_out_check / 12 / self._dt),
-                                    int(self.simulation_rounds),
-                                    int(1 / (self._dt * 12)))
+    def snowball(self, KO_Barrier, KO_Coupon, KI_Barrier, Bonus_Coupon):
 
-        knock_in_check = np.arange(int(0),
-                                   int(self.simulation_rounds),
-                                   int(1 / (self._dt * 365)))
-        # 敲出
-        # 1. 首先找出所有时点上，价格超过knock out点的路径
-        knock_out_indicator = np.where(MC.price_array > S0 * 1.3, 1, 0)
+        self.price_trajectories = []
+        _N = 252 * self.T
+        for i in range(self.npath):
+            _n = int(1.0 / self._dt / 12.0)  # number of time points in every month
+            _s = slice((_n - 1) * 3, _N, _n)
+            _stockprices_slice = self.price_array[_s,i]
+            if _stockprices_slice.max() >= KO_Barrier:
+                idx = np.argmax(_stockprices_slice >= KO_Barrier)
+                time_to_KO = (idx + 1) / 12.0
+                pv = (KO_Coupon * time_to_KO + 1) * np.exp(-r * time_to_KO)
+                self.price_trajectories.append(pv)
+                continue
 
-        # 2. 筛选出在检查时间点上超过knock out点的路径
-        tmp25 = np.where((knock_out_indicator[25, :] == 1), 1, 0)
-        tmp25 = (list(tmp25)).count(1)
+            # if no KO, bonus coupon or down in put
+            _stockprices = self.price_array[:,i]
+            indicator_KI = _stockprices.min() <= KI_Barrier
+            pv = ((1 - indicator_KI) * (Bonus_Coupon * T + 1) \
+                 + indicator_KI * (_stockprices[-1] - K + 1)) * np.exp(-r * T)
+            self.price_trajectories.append(pv)
 
-        tmp50 = np.where((knock_out_indicator[50, :] == 1) & (knock_out_indicator[25, :] == 0), 1, 0)
-        tmp50 = (list(tmp50)).count(1)
-
-        tmp75 = np.where(
-            (knock_out_indicator[75, :] == 1) & (knock_out_indicator[25, :] == 0) & (knock_out_indicator[50, :] == 0),
-            1, 0)
-        tmp75 = (list(tmp75)).count(1)
-
-        # 3. 计算总收益
-        terminal_profit1 = tmp25 * 90 / 365 * 10000 * 0.25 + tmp50 * 180 / 365 * 10000 * 0.25 + tmp25 * 270 / 365 * 10000 * 0.25
-        expection1 = tmp25 * 90 / 365 * 10000 * 0.25 * np.exp(-r * 90 / 365) + tmp50 * 180 / 365 * 10000 * np.exp(
-            -r * 180 / 365) + tmp25 * 270 / 365 * 10000 * 0.25 * np.exp(-r * 270 / 365)
-
-        # 未发生敲入敲出
-        # 1. 首先找出所有时点上，价格小于knock out且大于knock in点的路径
-        between_indicator = np.where((MC.price_array < S0 * 1.3) & (S0 * 0.8 < MC.price_array), 1, 0)
-
-        # 2. 符合此条件的路径，收益都相同，为持有一年获得的利润
-        count = 0
-        for i in range(0, between_indicator.shape[1]):
-            if between_indicator[25:, i].all() == 1:
-                count += 1
-            else:
-                pass
-
-        terminal_profit2 = 10000 * 0.25 * count
-        expection2 = terminal_profit2 * np.exp(-r * T)
-
-        # 发生敲入，且到期价格落在初始和敲出价格区间之内,获利0元
-        indicator = np.zeros([1, MC.npath])
-        for i in range(MC.price_array.shape[1]):
-            if ((MC.price_array[[knock_in_check], i]).any() < S0 * 0.8) & (S0 < MC.price_array[-1, i] < S0 * 1.3):
-                indicator[0, i] = int(1)
-            else:
-                pass
-        expection3 = 0
-
-        # 发生敲入，且到期价格低于期初价格,亏损(ST/S0 - 1)*本金
-        indicator2 = np.zeros([1, MC.npath])
-        for i in range(MC.price_array.shape[1]):
-            if ((MC.price_array[[knock_in_check], i]).any() < S0 * 0.8) & (MC.price_array[-1, i] < S0):
-                indicator2[0, i] = int(1)
-            else:
-                pass
-        terminal_price = indicator2 * MC.price_array[-1, :]
-        terminal_price = terminal_price[terminal_price != 0]
-        terminal_profit4 = (terminal_price / S0 - 1) * 10000
-        terminal_profit4 = np.where(terminal_profit4 == -10000.00000, 0, terminal_profit4)
-        expection4 = np.sum(terminal_profit4 * np.exp(-r * T))
-
-        expection = np.mean(expection1 + expection2 + expection3 + expection4)
+        _option_price = np.sum(self.price_trajectories) / self.npath
 
 
 # Test
@@ -293,14 +249,14 @@ T = (T-t)/60/60/24/365
 
 # initialize parameters
 S0 = 6500 # e.g. spot price = 35
-K = 40  # e.g. exercise price = 40
+K = 6500  # e.g. exercise price = 40
 T = T  # e.g. one year
 r = 0.01  # e.g. risk free rate = 1%
 sigma = 0.5  # e.g. volatility = 5%
-npath = 10000  # no. of slices PER YEAR e.g. quarterly adjusted or 252 trading days adjusted
+npath = 10000
 
 # optional parameter
-simulation_rounds = int(1000)  # For monte carlo simulation, a large number of simulations required
+simulation_rounds = int(1000)
 
 MC = ExoticPricing(S0=S0,
                    K=K,
@@ -311,10 +267,10 @@ MC = ExoticPricing(S0=S0,
                    npath=npath,
                    fix_random_seed=502)
 
-MC.heston(plot = True, kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+MC.heston(plot = False, kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
 
 # 检查时间点
-# 以三个月后开始检查为例
+# 以每日检查敲入，三个月后开始检查敲出为例
 knock_out_check = np.arange(int(3/12/MC._dt),
                             int(MC.simulation_rounds),
                             int(1/(MC._dt * 12)))
@@ -326,53 +282,87 @@ knock_in_check = np.arange(int(0),
 # 敲出
 # 1. 首先找出所有时点上，价格超过knock out点的路径
 knock_out_indicator = np.where(MC.price_array > S0 * 1.3, 1, 0)
+indicator = np.zeros([len(knock_out_check), MC.npath])
 
 # 2. 筛选出在检查时间点上超过knock out点的路径
-tmp25 = np.where((knock_out_indicator[25,:] == 1), 1, 0)
-tmp25 = (list(tmp25)).count(1)
+j=0
+for i in knock_out_check:
+    tmp = np.where((knock_out_indicator[i, :] == 1), 1, 0)
+    indicator[j,:] = tmp
+    j += 1
 
-tmp50 = np.where((knock_out_indicator[50,:] == 1) & (knock_out_indicator[25,:] == 0), 1, 0)
-tmp50 = (list(tmp50)).count(1)
-
-tmp75 = np.where((knock_out_indicator[75,:] == 1) & (knock_out_indicator[25,:] == 0) & (knock_out_indicator[50,:] == 0), 1, 0)
-tmp75 = (list(tmp75)).count(1)
+for i in range(1,indicator.shape[0]):
+    for j in range(0,indicator.shape[1]):
+        if indicator[0:i,j].any() == 1:
+            indicator[i, j] = 0
+        else:pass
+num = np.sum(indicator,axis=1)
 
 # 3. 计算总收益
-terminal_profit1 = tmp25 * 90/365 * 10000 * 0.25 + tmp50 * 180/365 * 10000 * 0.25 + tmp25 * 270/365 * 10000 * 0.25
-expection1 = tmp25 * 90/365 * 10000 * 0.25 * np.exp(-r * 90/365) + tmp50 * 180/365 * 10000 * np.exp(-r * 180/365) + tmp25 * 270/365 * 10000 * 0.25 * np.exp(-r * 270/365)
+# num = np.sum(num)
+terminal_profit1 = np.zeros_like(num)
+for i in range(len(num)):
+    prof = (1+0.25) * 10000 * num[i] * (3+i)/12 * np.exp(-r * (3+i)/12)
+    terminal_profit1[i]=prof
+expection1 = terminal_profit1 @ (num/MC.npath).T
 
+profit_array1 = []
+for i in range(len(num)):
+    prof = [0.25 * 10000 * (3+i)/12 * np.exp(-r * (3+i)/12)] * int(num[i])
+    profit_array1.append(prof)
+
+profit_array1=[i for j in profit_array1 for i in j ]
 # 未发生敲入敲出
 # 1. 首先找出所有时点上，价格小于knock out且大于knock in点的路径
 between_indicator = np.where((MC.price_array < S0 * 1.3) & (S0 * 0.8 < MC.price_array), 1, 0)
 
 # 2. 符合此条件的路径，收益都相同，为持有一年获得的利润
-count = 0
+num2 = 0
 for i in range(0,between_indicator.shape[1]):
-    if between_indicator[25:,i].all()==1:
-        count += 1
+    if between_indicator[250:,i].all() == 1:
+        num2 += 1
     else:pass
 
-terminal_profit2 = 10000 * 0.25 * count
-expection2 = terminal_profit2 * np.exp(-r * T)
+terminal_profit2 = 10000 * (1+0.25) * num2
+expection2 = terminal_profit2 * np.exp(-r * T) * num2/MC.npath
+profit_array2 = [terminal_profit2] * num2
 
 # 发生敲入，且到期价格落在初始和敲出价格区间之内,获利0元
-indicator = np.zeros([1,MC.npath])
+indicator3 = np.zeros([1,MC.npath])
 for i in range(MC.price_array.shape[1]):
-    if ((MC.price_array[[knock_in_check],i]).any() < S0*0.8) & (S0<MC.price_array[-1,i]<S0*1.3):
-        indicator[0,i] = int(1)
+    if ((MC.price_array[[knock_in_check], i]).any() < S0*0.8) & (S0 < MC.price_array[-1,i] < S0*1.3):
+        indicator3[0,i] = int(1)
     else:pass
-expection3 = 0
+
+for i in range(indicator3.shape[1]):
+    if tmp[i] == indicator3[0,i]:
+        indicator3[0,i] = 0
+    else:pass
+num3 = indicator3.tolist()[0].count(1)
+profit_array3 = [0] * num3
 
 # 发生敲入，且到期价格低于期初价格,亏损(ST/S0 - 1)*本金
-indicator2 = np.zeros([1,MC.npath])
+indicator4 = np.zeros([1,MC.npath])
 for i in range(MC.price_array.shape[1]):
-    if ((MC.price_array[[knock_in_check],i]).any() < S0*0.8) & (MC.price_array[-1,i]<S0):
-        indicator2[0,i] = int(1)
+    if ((MC.price_array[[knock_in_check],i]).any() < S0*0.8) & (MC.price_array[-1,i] < S0):
+        indicator4[0,i] = int(1)
     else:pass
-terminal_price = indicator2 * MC.price_array[-1,:]
-terminal_price = terminal_price[terminal_price!=0]
-terminal_profit4 = (terminal_price/S0 - 1) * 10000
-terminal_profit4 = np.where(terminal_profit4 == -10000.00000,0,terminal_profit4)
-expection4 = np.sum(terminal_profit4 * np.exp(-r * T))
 
-expection = np.mean(expection1 + expection2 + expection3 + expection4)
+tmp = np.sum(indicator,axis=0)
+for i in range(indicator4.shape[1]):
+    if tmp[i] == indicator4[0,i]:
+        indicator4[0,i] = 0
+    else:pass
+num4 = indicator4.tolist()[0].count(1)
+
+terminal_price = indicator4 * MC.price_array[-1,:]
+terminal_price = terminal_price[terminal_price!=0]
+terminal_profit4 = ((terminal_price-S0)/S0) * 10000
+# terminal_profit4 = np.where(terminal_profit4 == -10000.00000, 0, terminal_profit4)
+expection4 = np.sum(terminal_profit4 * np.exp(-r * T)) * num4/MC.npath
+profit_array4 = terminal_profit4.copy()
+
+profit_array = [profit_array1,profit_array2,profit_array3,profit_array4]
+profit_array=[i for j in profit_array for i in j ]
+
+np.sum(num) + num2 + num3 + num4
