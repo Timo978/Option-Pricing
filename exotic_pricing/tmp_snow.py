@@ -220,11 +220,11 @@ class ExoticPricing:
     def snowball(self, KO_Barrier, KO_Coupon, KI_Barrier, Bonus_Coupon):
 
         self.price_trajectories = []
-        _N = 252 * self.T
+
         for i in range(self.npath):
             _n = int(1.0 / self._dt / 12.0)  # number of time points in every month
-            _s = slice((_n - 1) * 3, _N, _n)
-            _stockprices_slice = self.price_array[_s,i]
+            _s = np.arange(int(_n * 3), self.simulation_rounds, int(self.simulation_rounds/12))
+            _stockprices_slice = self.price_array[_s, i]
             if _stockprices_slice.max() >= KO_Barrier:
                 idx = np.argmax(_stockprices_slice >= KO_Barrier)
                 time_to_KO = (idx + 1) / 12.0
@@ -235,11 +235,11 @@ class ExoticPricing:
             # if no KO, bonus coupon or down in put
             _stockprices = self.price_array[:,i]
             indicator_KI = _stockprices.min() <= KI_Barrier
-            pv = ((1 - indicator_KI) * (Bonus_Coupon * T + 1) \
-                 + indicator_KI * (_stockprices[-1] - K + 1)) * np.exp(-r * T)
+            pv = ((1 - indicator_KI) * (Bonus_Coupon * T + 1) + indicator_KI * (_stockprices[-1] - K + 1)) * np.exp(-r * T)
             self.price_trajectories.append(pv)
 
         _option_price = np.sum(self.price_trajectories) / self.npath
+        return _option_price
 
 
 # Test
@@ -366,3 +366,5 @@ profit_array = [profit_array1,profit_array2,profit_array3,profit_array4]
 profit_array=[i for j in profit_array for i in j ]
 
 np.sum(num) + num2 + num3 + num4
+
+a = MC.snowball(1.03, 0.25, 0.75 , 0.25)
