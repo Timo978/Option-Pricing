@@ -235,15 +235,10 @@ class ExoticPricing:
 
         return self.expectation, self.standard_error
 
-    def binary_option(self, option_type, payoff,loss):
-        if option_type == 'call':
-            self.terminal_profit = np.where(self.terminal_prices > self.K, payoff, loss)
-            self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
-            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
-        else:
-            self.terminal_profit = np.where(self.terminal_prices < self.K, payoff, loss)
-            self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
-            self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
+    def binary_option(self, option_type, payoff, loss):
+        self.terminal_profit = np.where(self.terminal_prices > self.K, payoff, loss) if option_type == 'call' else np.where(self.terminal_prices < self.K, payoff, loss)
+        self.expectation = np.mean(self.terminal_profit * np.exp(-self.r * self.T))
+        self.standard_error = np.std(self.terminal_profit) / np.sqrt(len(self.terminal_profit))
 
         print('-' * 64)
         print(
