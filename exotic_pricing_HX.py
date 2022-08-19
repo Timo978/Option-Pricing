@@ -36,7 +36,7 @@ class ExoticPricing:
         self.S0 = float(S0)
         self.K = float(K)
         self.T = float(T)
-        self.sigma = float(sigma)
+        # self.sigma = float(sigma)
 
         # MC params
         self.npath = int(npath)
@@ -48,7 +48,9 @@ class ExoticPricing:
 
         self.terminal_prices = [] # simulation price at T
 
-        # self.z_t = np.random.standard_normal((self.simulation_rounds, self.npath)) # dW in dt is a standard gaussian distribution
+        self.z_t = np.random.standard_normal((self.simulation_rounds, self.npath))
+
+        self.sigma = np.full((self.simulation_rounds, self.npath), sigma)
 
         if type(fix_random_seed) is bool:
             if fix_random_seed:
@@ -111,8 +113,8 @@ class ExoticPricing:
         _variance_v = sigma_v ** 2
         assert 2 * kappa * theta > _variance_v, 'Feller condition is not satisfied, check the parameters!'  # Feller condition
 
-        _S = self.S0 * np.ones((self.simulation_rounds,self.npath))
-        _V = self.sigma * np.ones((self.simulation_rounds,self.npath))
+        _S = self.S0 * np.ones((self.simulation_rounds, self.npath))
+        _V = self.sigma * np.ones((self.simulation_rounds, self.npath))
         _cov = np.array([[1, rho], [rho, 1]])
         _CH = np.linalg.cholesky(_cov) # Cholesky decomposition
 
@@ -120,7 +122,7 @@ class ExoticPricing:
             _ZH = np.random.normal(size=(2, self.npath//2))
             _ZA = np.c_[_ZH,-_ZH] # Antithetic sampling
             _Z = _CH @ _ZA
-            _dS = self.r * self.S0 * self._dt + np.sqrt(_V[i-1,:]) * _S[i-1,:] * np.sqrt(self._dt) * _Z[0,:]
+            _dS = self.r * self.S0 * self._dt + np.sqrt(_V[i-1, :]) * _S[i-1, :] * np.sqrt(self._dt) * _Z[0, :]
             _S[i ,:] = _S[i-1,:] + _dS
             _dV = kappa * (theta - _V[i-1, :]) * self._dt + sigma_v * np.sqrt(_V[i-1, :]) * np.sqrt(self._dt) * _Z[1, :]
             _V[i, :] = np.maximum(_V[i-1, :] + _dV, 0)
@@ -131,6 +133,34 @@ class ExoticPricing:
         self.sigma = _V
         print('MC price expection:', np.mean(self.terminal_prices),'\nMC price sigma:', self.stock_price_standard_error)
         return np.mean(self.terminal_prices), self.stock_price_standard_error
+
+    def stock_price_simulation(self) -> Tuple[np.ndarray, float]:
+        self.exp_mean = (self.mue - (self.sigma ** 2.0) * 0.5) * self._dt
+        self.exp_diffusion = self.sigma * np.sqrt(self._dt)
+
+        self.price_array = np.zeros((self.simulation_rounds,self.npath))
+        self.price_array[0, :] = self.S0
+
+        for i in range(1, self.simulation_rounds):
+            self.price_array[i, :] = self.price_array[i - 1, :] * np.exp(
+                self.exp_mean[i,:] + self.exp_diffusion[i - 1, :] * self.z_t[i - 1, :]
+            )
+
+        self.terminal_prices = self.price_array[-1, :]
+        self.stock_price_expectation = np.mean(self.terminal_prices)
+        self.stock_price_standard_error = np.std(self.terminal_prices) / np.sqrt(len(self.terminal_prices))
+
+        print('-' * 64)
+        print(
+            " Number of simulations %4.1i \n S0 %4.1f \n K %2.1f \n Maximum Stock price %4.2f \n"
+            " Minimum Stock price %4.2f \n Average stock price %4.3f \n Standard Error %4.5f " % (
+                self.simulation_rounds, self.S0, self.K, np.max(self.terminal_prices),
+                np.min(self.terminal_prices), self.stock_price_expectation, self.stock_price_standard_error
+            )
+        )
+        print('-' * 64)
+
+        return self.stock_price_expectation, self.stock_price_standard_error
 
     def barrier_option(self, option_type: str, barrier_price: float, barrier_type: str, barrier_direction: str,
                        parisian_barrier_days: int or None = None) -> Tuple[float, float]:
@@ -273,51 +303,63 @@ class ExoticPricing:
             self.price_trajectories.append(pv)
 
         _option_price = np.sum(self.price_trajectories) / self.npath
+        print('-' * 64)
+        print(
+            " Snowball monte carlo \n S0 %4.1f \n K %2.1f \n Knock-in price %4.1f \n Knock-out price %4.1f \n"
+            " Option Value %4.3f" % (
+                self.S0, self.K, KI_Barrier * self.S0, KO_Barrier * self.S0, _option_price
+            )
+        )
+        print('-' * 64)
         return _option_price
 
-# Test
-t = datetime.timestamp(datetime.strptime('20210603-00:00:00',"%Y%m%d-%H:%M:%S"))
-T = datetime.timestamp(datetime.strptime('20220603-00:00:00',"%Y%m%d-%H:%M:%S"))
-T = (T-t)/60/60/24/365
+if __name__ == '__main__':
+    # Test
+    t = datetime.timestamp(datetime.strptime('20210603-00:00:00', "%Y%m%d-%H:%M:%S"))
+    T = datetime.timestamp(datetime.strptime('20220603-00:00:00', "%Y%m%d-%H:%M:%S"))
+    T = (T - t) / 60 / 60 / 24 / 365
 
-# initialize parameters
-S0 = 35 # e.g. spot price = 35
-K = 40  # e.g. exercise price = 40
-T = T  # e.g. one year
-r = 0.01  # e.g. risk free rate = 1%
-sigma = 0.5  # e.g. volatility = 5%
-npath = 10000  # no. of slices PER YEAR e.g. quarterly adjusted or 252 trading days adjusted
+    # initialize parameters
+    S0 = 35  # e.g. spot price = 35
+    K = 40  # e.g. exercise price = 40
+    T = T  # e.g. one year
+    r = 0.01  # e.g. risk free rate = 1%
+    sigma = 0.5  # e.g. volatility = 5%
+    npath = 10000  # no. of slices PER YEAR e.g. quarterly adjusted or 252 trading days adjusted
 
-# optional parameter
-simulation_rounds = int(100)  # For monte carlo simulation, a large number of simulations required
+    # optional parameter
+    simulation_rounds = int(100)  # For monte carlo simulation, a large number of simulations required
 
-MC = ExoticPricing(S0=S0,
-                   K=K,
-                   T=T,
-                   r=r,
-                   sigma=sigma,
-                   simulation_rounds=simulation_rounds,
-                   npath=npath,
-                   fix_random_seed=501)
+    MC = ExoticPricing(S0=S0,
+                       K=K,
+                       T=T,
+                       r=r,
+                       sigma=sigma,
+                       simulation_rounds=simulation_rounds,
+                       npath=npath,
+                       fix_random_seed=501)
 
-MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+    MC.stock_price_simulation()
+    MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+    MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
 
-# barrier
-# barrier_price= 80.0
-# parisian_barrier_days=21
-# MC.barrier_option(option_type="call",
-#                   barrier_price=barrier_price,
-#                   barrier_type="knock-in",
-#                   barrier_direction="down",
-#                   parisian_barrier_days=parisian_barrier_days)
+    # barrier
+    # barrier_price= 80.0
+    # parisian_barrier_days=21
+    # MC.barrier_option(option_type="call",
+    #                   barrier_price=barrier_price,
+    #                   barrier_type="knock-in",
+    #                   barrier_direction="down",
+    #                   parisian_barrier_days=parisian_barrier_days)
 
-# binary
-payoff=25
-loss=-10
-MC.binary_option(option_type = 'call',
-                 payoff = payoff,
-                 loss = loss)
+    # binary
+    payoff = 25
+    loss = -10
+    MC.binary_option(option_type='call',
+                     payoff=payoff,
+                     loss=loss)
 
-# look back
-MC.look_back_european('call')
+    # look back
+    MC.look_back_european('call')
+
+    MC.snowball(KO_Barrier=1.3, KO_Coupon=0.25, KI_Barrier=0.75, Bonus_Coupon=0.25)
