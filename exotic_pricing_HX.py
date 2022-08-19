@@ -8,6 +8,7 @@
 import numpy as np
 from datetime import datetime
 from typing import Tuple
+import matplotlib.pyplot as plt
 
 class ExoticPricing:
     def __init__(self, r, S0: float, K: float, T: float, sigma: float,
@@ -307,6 +308,12 @@ class ExoticPricing:
         )
         print('-' * 64)
         return _option_price
+
+    def PGP(self):
+        fig = plt.figure(figsize=(28,16))
+        plt.plot(self.price_array)
+        plt.show()
+
 
 if __name__ == '__main__':
     # Test
