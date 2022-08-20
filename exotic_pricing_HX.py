@@ -58,6 +58,30 @@ class ExoticPricing:
                 np.random.seed(15000)
         elif type(fix_random_seed) is int:
             np.random.seed(fix_random_seed)
+    def vasicek_model(self, a: float, b: float, sigma_r: float) -> np.ndarray:
+        """
+        When interest rate follows a stochastic process. Vasicek model for interest rate simulation.
+        this is the continuous-time analog of the AR(1) process.
+        Interest rate in the Vasicek model can be negative. \n
+
+        dr = a(b-r) * dt + r_sigma * dz
+        :param a: speed of mean-reversion
+        :param b: risk-free rate is mean-reverting to b
+        :param sigma_r: interest rate volatility (standard deviation)
+        :return:
+        """
+        _interest_z_t = np.random.standard_normal((self.simulation_rounds, self.npath))
+        _interest_array = np.full((self.simulation_rounds, self.npath), self.r * self._dt)
+
+        for i in range(1, self.simulation_rounds):
+            _interest_array[i, :] = b + np.exp(-a / self.simulation_rounds) * (_interest_array[i - 1, :] - b) + np.sqrt(
+                sigma_r ** 2 / (2 * a) * (1 - np.exp(-2 * a / self.simulation_rounds))
+            ) * _interest_z_t[i, :]
+
+        # re-define the interest rate array
+        self.r = _interest_array
+
+        return _interest_array
 
     def CIR_model(self, a: float, b: float, sigma_r: float) -> np.ndarray:
         '''
@@ -377,7 +401,7 @@ class ExoticPricing:
         return _option_price
 
     def PGP(self):
-        fig = plt.figure(figsize=(28,16))
+        fig = plt.figure(figsize=(18,12))
         plt.plot(self.price_array)
         plt.show()
 
@@ -408,9 +432,10 @@ if __name__ == '__main__':
                        npath=npath,
                        fix_random_seed=501)
 
-    MC.stock_price_simulation()
+    MC.vasicek_model(a=0.5, b=0.05, sigma_r=0.1)
     MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-    MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+    # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5) # heston方法中已经包含了价格生成过程
+    MC.stock_price_simulation()
 
     # barrier
     # barrier_price= 80.0
@@ -431,43 +456,8 @@ if __name__ == '__main__':
     # look back
     MC.look_back_european('call')
 
+    # snowball
     MC.snowball(KO_Barrier=1.3, KO_Coupon=0.25, KI_Barrier=0.75, Bonus_Coupon=0.25)
 
+    # american option
     MC.american_option_longstaff_schwartz()
-
-    discount_table = np.exp(np.cumsum(-MC.r, axis=1))
-    price_array = MC.price_array
-    intrinsic_val = np.maximum((price_array - K), 0.0)
-    cf = intrinsic_val[-1, :]
-
-    stopping_rule = np.zeros_like(price_array)
-    stopping_rule[-1, :] = np.where(intrinsic_val[-1, :] > 0, 1, 0)
-
-    # Longstaff and Schwartz iteration
-    for t in range(simulation_rounds - 2, 0, -1):  # fill out the value table from backwards
-        # find out in-the-money path to better estimate the conditional expectation function
-        # where exercise is relevant and significantly improves the efficiency of the algorithm
-        itm_path = np.where(intrinsic_val[t, :] > 0)[0]
-
-        cf = cf * np.exp(-r[t + 1, :])
-        Y = cf[itm_path]
-        X = price_array[t, itm_path]
-
-        # initialize continuation value
-        hold_val = np.zeros(shape=npath)
-        # if there is only 5 in-the-money paths (most likely appear in out-of-the-money options
-        # then simply assume that value of holding = 0.
-        # otherwise, run regression and compute conditional expectation E[Y|X].
-        if len(itm_path) > 5:
-            rg = np.polyfit(x=X, y=Y, deg=2)  # regression fitting
-            hold_val[itm_path] = np.polyval(p=rg, x=X[0])  # conditional expectation E[Y|X]
-
-        # 1 <==> exercise, 0 <==> hold
-        stopping_rule[t, :] = np.where(intrinsic_val[t, :] > hold_val, 1, 0)
-        # if exercise @ t, all future stopping rules = 0 as the option contract is exercised.
-        stopping_rule[(t + 1):,np.where(intrinsic_val[t, :] > hold_val)] = 0  ####################
-
-        # cashflow @ t, if hold, cf = 0, if exercise, cf = intrinsic value @ t.
-        cf = np.where(intrinsic_val[t, :] > 0, intrinsic_val[t, :], 0)
-
-    simulation_vals = (intrinsic_val * stopping_rule * discount_table).sum(axis=1)
