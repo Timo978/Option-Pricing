@@ -123,7 +123,7 @@ class ExoticPricing:
             _ZH = np.random.normal(size=(2, self.npath//2))
             _ZA = np.c_[_ZH,-_ZH] # Antithetic sampling
             _Z = _CH @ _ZA
-            _dS = self.r * self.S0 * self._dt + np.sqrt(_V[i-1, :]) * _S[i-1, :] * np.sqrt(self._dt) * _Z[0, :]
+            _dS = self.r[i, :] * self.S0 * self._dt + np.sqrt(_V[i-1, :]) * _S[i-1, :] * np.sqrt(self._dt) * _Z[0, :]
             _S[i ,:] = _S[i-1,:] + _dS
             _dV = kappa * (theta - _V[i-1, :]) * self._dt + sigma_v * np.sqrt(_V[i-1, :]) * np.sqrt(self._dt) * _Z[1, :]
             _V[i, :] = np.maximum(_V[i-1, :] + _dV, 0)
@@ -173,6 +173,7 @@ class ExoticPricing:
         """
         assert option_type == 'call' or option_type == 'put', 'option_type must be either call or put'
         assert len(self.terminal_prices) != 0, 'Please simulate the stock price first'
+        assert len(self.r) != 1, 'please simulate the risk-free rate first'
 
         if option_type == 'call':
             self.intrinsic_val = np.maximum((self.price_array - self.K), 0.0)
@@ -190,7 +191,7 @@ class ExoticPricing:
         for t in range(self.simulation_rounds - 2, 0, -1):  # fill out the value table from backwards
             # find out in-the-money path to better estimate the conditional expectation function
             # where exercise is relevant and significantly improves the efficiency of the algorithm
-            itm_path = np.where(self.intrinsic_val[t, :] > 0)  # <==> self.price_array[:, t] vs. self.K
+            itm_path = np.where(self.intrinsic_val[t, :] > 0)[0]
 
             cf = cf * np.exp(-self.r[t + 1, :])
             Y = cf[itm_path]
@@ -202,7 +203,7 @@ class ExoticPricing:
             # then simply assume that value of holding = 0.
             # otherwise, run regression and compute conditional expectation E[Y|X].
             if len(itm_path) > 5:
-                rg = np.polyfit(x=X[0], y=Y, deg=poly_degree)  # regression fitting
+                rg = np.polyfit(x=X, y=Y, deg=poly_degree)  # regression fitting
                 hold_val[itm_path] = np.polyval(p=rg, x=X[0])  # conditional expectation E[Y|X]
 
             # 1 <==> exercise, 0 <==> hold
@@ -446,7 +447,7 @@ if __name__ == '__main__':
     for t in range(simulation_rounds - 2, 0, -1):  # fill out the value table from backwards
         # find out in-the-money path to better estimate the conditional expectation function
         # where exercise is relevant and significantly improves the efficiency of the algorithm
-        itm_path = np.where(intrinsic_val[t, :] > 0)  # <==> price_array[:, t] vs. K
+        itm_path = np.where(intrinsic_val[t, :] > 0)[0]
 
         cf = cf * np.exp(-r[t + 1, :])
         Y = cf[itm_path]
@@ -458,7 +459,7 @@ if __name__ == '__main__':
         # then simply assume that value of holding = 0.
         # otherwise, run regression and compute conditional expectation E[Y|X].
         if len(itm_path) > 5:
-            rg = np.polyfit(x=X[0], y=Y, deg=2)  # regression fitting
+            rg = np.polyfit(x=X, y=Y, deg=2)  # regression fitting
             hold_val[itm_path] = np.polyval(p=rg, x=X[0])  # conditional expectation E[Y|X]
 
         # 1 <==> exercise, 0 <==> hold
