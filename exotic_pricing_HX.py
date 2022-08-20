@@ -163,6 +163,72 @@ class ExoticPricing:
 
         return self.stock_price_expectation, self.stock_price_standard_error
 
+    def american_option_longstaff_schwartz(self, poly_degree: int = 2, option_type: str = 'call') -> \
+            Tuple[float, float]:
+        """
+        American option, Longstaff and Schwartz method
+
+        :param poly_degree: x^n, default = 2
+        :param option_type: call or put
+        """
+        assert option_type == 'call' or option_type == 'put', 'option_type must be either call or put'
+        assert len(self.terminal_prices) != 0, 'Please simulate the stock price first'
+
+        if option_type == 'call':
+            self.intrinsic_val = np.maximum((self.price_array - self.K), 0.0)
+        elif option_type == 'put':
+            self.intrinsic_val = np.maximum((self.K - self.price_array), 0.0)
+
+        self.discount_table = np.exp(np.cumsum(-self.r, axis=1))
+        # last day cashflow == last day intrinsic value
+        cf = self.intrinsic_val[-1, :]
+
+        stopping_rule = np.zeros_like(self.price_array)
+        stopping_rule[-1, :] = np.where(self.intrinsic_val[-1, :] > 0, 1, 0)
+
+        # Longstaff and Schwartz iteration
+        for t in range(self.simulation_rounds - 2, 0, -1):  # fill out the value table from backwards
+            # find out in-the-money path to better estimate the conditional expectation function
+            # where exercise is relevant and significantly improves the efficiency of the algorithm
+            itm_path = np.where(self.intrinsic_val[t, :] > 0)  # <==> self.price_array[:, t] vs. self.K
+
+            cf = cf * np.exp(-self.r[t + 1, :])
+            Y = cf[itm_path]
+            X = self.price_array[t,itm_path]
+
+            # initialize continuation value
+            hold_val = np.zeros(shape=self.npath)
+            # if there is only 5 in-the-money paths (most likely appear in out-of-the-money options
+            # then simply assume that value of holding = 0.
+            # otherwise, run regression and compute conditional expectation E[Y|X].
+            if len(itm_path) > 5:
+                rg = np.polyfit(x=X[0], y=Y, deg=poly_degree)  # regression fitting
+                hold_val[itm_path] = np.polyval(p=rg, x=X[0])  # conditional expectation E[Y|X]
+
+            # 1 <==> exercise, 0 <==> hold
+            stopping_rule[t, :] = np.where(self.intrinsic_val[t, :] > hold_val, 1, 0)
+            # if exercise @ t, all future stopping rules = 0 as the option contract is exercised.
+            stopping_rule[(t + 1):, np.where(self.intrinsic_val[t, :] > hold_val)] = 0 ####################
+
+            # cashflow @ t, if hold, cf = 0, if exercise, cf = intrinsic value @ t.
+            cf = np.where(self.intrinsic_val[t, :] > 0, self.intrinsic_val[t, :], 0)
+
+        simulation_vals = (self.intrinsic_val * stopping_rule * self.discount_table).sum(axis=1)
+        self.expectation = np.average(simulation_vals)
+        self.standard_error = np.std(simulation_vals) / np.sqrt(self.npath)
+
+        print('-' * 64)
+        print(
+            " American %s Longstaff-Schwartz method (assume polynomial fit)"
+            " \n polynomial degree = %i \n S0 %4.1f \n K %2.1f \n"
+            " Option Value %4.3f \n Standard Error %4.5f " % (
+                option_type, poly_degree, self.S0, self.K, self.expectation, self.standard_error
+            )
+        )
+        print('-' * 64)
+
+        return self.expectation, self.standard_error
+
     def barrier_option(self, option_type: str, barrier_price: float, barrier_type: str, barrier_direction: str,
                        parisian_barrier_days: int or None = None) -> Tuple[float, float]:
         '''
@@ -365,3 +431,42 @@ if __name__ == '__main__':
     MC.look_back_european('call')
 
     MC.snowball(KO_Barrier=1.3, KO_Coupon=0.25, KI_Barrier=0.75, Bonus_Coupon=0.25)
+
+    MC.american_option_longstaff_schwartz()
+
+    discount_table = np.exp(np.cumsum(-MC.r, axis=1))
+    price_array = MC.price_array
+    intrinsic_val = np.maximum((price_array - K), 0.0)
+    cf = intrinsic_val[-1, :]
+
+    stopping_rule = np.zeros_like(price_array)
+    stopping_rule[-1, :] = np.where(intrinsic_val[-1, :] > 0, 1, 0)
+
+    # Longstaff and Schwartz iteration
+    for t in range(simulation_rounds - 2, 0, -1):  # fill out the value table from backwards
+        # find out in-the-money path to better estimate the conditional expectation function
+        # where exercise is relevant and significantly improves the efficiency of the algorithm
+        itm_path = np.where(intrinsic_val[t, :] > 0)  # <==> price_array[:, t] vs. K
+
+        cf = cf * np.exp(-r[t + 1, :])
+        Y = cf[itm_path]
+        X = price_array[t, itm_path]
+
+        # initialize continuation value
+        hold_val = np.zeros(shape=npath)
+        # if there is only 5 in-the-money paths (most likely appear in out-of-the-money options
+        # then simply assume that value of holding = 0.
+        # otherwise, run regression and compute conditional expectation E[Y|X].
+        if len(itm_path) > 5:
+            rg = np.polyfit(x=X[0], y=Y, deg=2)  # regression fitting
+            hold_val[itm_path] = np.polyval(p=rg, x=X[0])  # conditional expectation E[Y|X]
+
+        # 1 <==> exercise, 0 <==> hold
+        stopping_rule[t, :] = np.where(intrinsic_val[t, :] > hold_val, 1, 0)
+        # if exercise @ t, all future stopping rules = 0 as the option contract is exercised.
+        stopping_rule[(t + 1):,np.where(intrinsic_val[t, :] > hold_val)] = 0  ####################
+
+        # cashflow @ t, if hold, cf = 0, if exercise, cf = intrinsic value @ t.
+        cf = np.where(intrinsic_val[t, :] > 0, intrinsic_val[t, :], 0)
+
+    simulation_vals = (intrinsic_val * stopping_rule * discount_table).sum(axis=1)
