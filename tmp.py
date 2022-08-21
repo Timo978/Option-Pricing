@@ -13,9 +13,9 @@ delta_S = S_max/M
 f_matrx = np.zeros([M+1,M+1])
 f_matrx[:,0] = 0.0
 for i in range(M + 1):
-    f_matrx[M, i] = float(max(delta_S * i - K, 0))
+    f_matrx[M, i] = float(max(delta_S * i - K, 0)) # 通过不断分割S（dS）来获得期末时（最后一行）期权可能的价值
     # 边界条件③：S=S_max的时候，call=S_max-K
-f_matrx[:, M] = float(S_max - K)
+f_matrx[:, M] = float(S_max - K) # 此矩阵的M列代表到期那天，价格也达到最大值时期权的价值
 
 def calculate_coeff(j):
 
