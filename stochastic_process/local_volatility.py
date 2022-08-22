@@ -28,3 +28,10 @@ def local_vol(df):
                     df.loc[i, 'c'] - df.loc[i, 'k'] * dc_by_dk[i])) / (0.5 * df.loc[i, 'k'] ** 2 * d2c_by_dk2[i]))
 
     return local_vol
+
+from crypto_spider.tushare_ivSurface import main
+df = main('20220715')
+df = df.loc[df['call_put']!='P',:]
+df = df.drop_duplicates(subset=['k'])
+df.reset_index(inplace=True)
+df.to_csv('C://Desktop/tmp.csv',index = False)
