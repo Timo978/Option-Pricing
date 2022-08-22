@@ -25,30 +25,28 @@ q <- plot_ly(x = interpolate$x, y = interpolate$y,
              z = interpolate$z)%>% add_surface()
 q
 
-increment = 1.5
+dt = 1/252
+dk = 0.5
 deltac_by_deltat = c()
 deltac_by_deltak = c()
 delta2c_by_deltak2 = c()
 local_volatility = c()
 for (i in (1:length(df$t))) {
     deltac_by_deltat[i] = (call_bsm(So = 2.872, df$k[i],
-        r = 0.0066, df$t[i] + increment, type = "Call", sig = df$iv[i]) -
-        call_bsm(So = 770.05, df$k[i], r = 0.0066, df$t[i],
-            type = "Call", sig = df$iv[i]))/(df$t[i] +
-        increment - df$t[i])
-
-    deltac_by_deltak[i] = (call_bsm(So = 2.872, df$k[i] +
-        increment, r = 0.0066, df$t[i], type = "Call", sig = df$iv[i]) -
+        r = 0.0066, df$t[i] + dt, type = "Call", sig = df$iv[i]) -
         call_bsm(So = 2.872, df$k[i], r = 0.0066, df$t[i],
-            type = "Call", sig = df$iv[i]))/(df$k[i] +
-        increment - df$k[i])
+            type = "Call", sig = df$iv[i]))/(df$t[i] +
+        dt - df$t[i])
+
+    deltac_by_deltak[i] = (call_bsm(So = 2.872, df$k[i] + dk, r = 0.0066, df$t[i], type = "Call", sig = df$iv[i]) -
+        call_bsm(So = 2.872, df$k[i], r = 0.0066, df$t[i],type = "Call", sig = df$iv[i]))/(df$k[i] + dk - df$k[i])
 
     delta2c_by_deltak2[i] = (call_bsm(So = 2.872, df$k[i] +
-        increment, r = 0.0066, df$t[i], type = "Call", sig = df$iv[i]) -
+        dk, r = 0.0066, df$t[i], type = "Call", sig = df$iv[i]) -
         2 * call_bsm(So = 2.872, df$k[i], r = 0.0066, df$t[i],
             type = "Call", sig = df$iv[i]) + call_bsm(So = 2.872,
-        df$k[i] - increment, r = 0.0066, df$t[i], type = "Call",
-        sig = df$iv[i]))/(df$k[i] + increment - df$k[i])
+        df$k[i] - dk, r = 0.0066, df$t[i], type = "Call",
+        sig = df$iv[i]))/(df$k[i] + dk - df$k[i])^2
 
     local_volatility[i] = sqrt((deltac_by_deltat[i] + 0.0066 *
         df$k[i] * deltac_by_deltak[i])/(0.5 * df$k[i] *
