@@ -120,7 +120,7 @@ class ExoticPricing:
 
     def heston(self, kappa: float, theta: float, sigma_v: float, rho: float = 0.0) -> np.ndarray:
         '''
-        Heston is a classic stochastic vol model, assuming the volatility follows Ornstein-Uhlenbeck process(mean-reversion),
+        Heston is a classical stochastic vol model, assuming the volatility follows Ornstein-Uhlenbeck process(mean-reversion),
         it describes the correlation between the vol of underlying asset and the implied vol of options.
 
         Parameters
