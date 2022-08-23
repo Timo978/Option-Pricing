@@ -13,8 +13,8 @@ call_bsm = function (So,K,r,T,type,sig){
   return (price)}
 }
 
-setwd('C://Desktop/')
-df <- read.csv('C://Desktop/tmp.csv')
+setwd('/Users/yangtianyu/Desktop/')
+df <- read.csv('tmp.csv')
 
 p <- plot_ly(x = df$t, y = df$k,
              z = matrix(df$iv,nrow=length(df$t))) %>% add_surface()
