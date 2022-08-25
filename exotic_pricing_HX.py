@@ -346,6 +346,17 @@ class ExoticPricing:
         return self.expectation, self.standard_error
 
     def look_back_european(self, option_type: str = 'call') -> Tuple[float, float]:
+        '''
+        look back options' payoff depends on the Extreme point of underlying price
+
+        Parameters
+        ----------
+        option_type: call or put
+
+        Returns
+        -------
+
+        '''
         assert len(self.terminal_prices) != 0, 'Please simulate the stock price first'
         assert option_type == 'call' or option_type == 'put', 'option_type must be either call or put'
 
@@ -435,9 +446,9 @@ if __name__ == '__main__':
                        fix_random_seed=2)
 
     # MC.vasicek_model(a=0.5, b=0.05, sigma_r=0.1)
-    MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-    MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5) # heston方法中已经包含了价格生成过程
-    # MC.stock_price_simulation()
+    # MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+    # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5) # heston方法中已经包含了价格生成过程
+    MC.stock_price_simulation()
 
     # barrier
     # barrier_price= 80.0
@@ -465,79 +476,128 @@ if __name__ == '__main__':
     # MC.american_option_longstaff_schwartz()
 
     # local vol
-    ####################
-    # 初始价格
-    barrier_price= 80.0
-    parisian_barrier_days=21
-    C0 = MC.barrier_option(option_type="call",
-                      barrier_price=barrier_price,
-                      barrier_type="knock-in",
-                      barrier_direction="down",
-                      parisian_barrier_days=parisian_barrier_days)[0]
+    def local_vol(dt,dk,S0,K,T,r,sigma,simulation_rounds,npath):
 
-    ######################
-    # dt
-    dt = 100/252  # e.g. one year
+        # 计算每个时点的期权的价格
+        barrier_price = 35 * 1.3
+        parisian_barrier_days = 21
 
-    MC = ExoticPricing(S0=S0,
-                       K=K,
-                       T=T + dt,
-                       r=r,
-                       sigma=sigma,
-                       simulation_rounds=simulation_rounds,
-                       npath=npath,
-                       fix_random_seed=2)
-    MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-    MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
-    c_t = MC.barrier_option(option_type="call",
-                      barrier_price=barrier_price,
-                      barrier_type="knock-in",
-                      barrier_direction="down",
-                      parisian_barrier_days=parisian_barrier_days)[0]
+        MC = ExoticPricing(S0=S0,
+                           K=K,
+                           T=T,
+                           r=r,
+                           sigma=sigma,
+                           simulation_rounds=simulation_rounds,
+                           npath=npath,
+                           fix_random_seed=2)
+        # MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+        # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+        MC.stock_price_simulation()
 
-    dc_dt = (c_t - C0)/(1/252)
+        C0 = MC.barrier_option(option_type="call",
+                               barrier_price=barrier_price,
+                               barrier_type="knock-in",
+                               barrier_direction="down",
+                               parisian_barrier_days=parisian_barrier_days)[0]
 
-    ########################
-    # dk
-    K1 = 40 + 0.5 # e.g. exercise price = 40
-    T = T  # e.g. one year
+        # 计算此时点上dc by dt
+        dt = dt
+        dk = dk
 
-    MC = ExoticPricing(S0=S0,
-                       K=K1,
-                       T=T,
-                       r=r,
-                       sigma=sigma,
-                       simulation_rounds=simulation_rounds,
-                       npath=npath,
-                       fix_random_seed=2)
-    MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-    MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
-    c_k1 = MC.barrier_option(option_type="call",
-                      barrier_price=barrier_price,
-                      barrier_type="knock-in",
-                      barrier_direction="down",
-                      parisian_barrier_days=parisian_barrier_days)[0]
-    dc_dk1 = (c_k1-C0)/0.5
+        MC = ExoticPricing(S0=S0,
+                           K=K,
+                           T=T + dt,
+                           r=r,
+                           sigma=sigma,
+                           simulation_rounds=simulation_rounds,
+                           npath=npath,
+                           fix_random_seed=2)
+        # MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+        # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+        MC.stock_price_simulation()
+        c_t = MC.barrier_option(option_type="call",
+                                barrier_price=barrier_price,
+                                barrier_type="knock-in",
+                                barrier_direction="down",
+                                parisian_barrier_days=parisian_barrier_days)[0]
 
-    K2 = 40 - 0.5  # e.g. exercise price = 40
-    T = T  # e.g. one year
+        dc_dt = (c_t - C0)/dt
 
-    MC = ExoticPricing(S0=S0,
-                       K=K2,
-                       T=T,
-                       r=r,
-                       sigma=sigma,
-                       simulation_rounds=simulation_rounds,
-                       npath=npath,
-                       fix_random_seed=501)
-    MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-    MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
-    c_k2 = MC.barrier_option(option_type="call",
-                             barrier_price=barrier_price,
-                             barrier_type="knock-in",
-                             barrier_direction="down",
-                             parisian_barrier_days=parisian_barrier_days)[0]
-    d2c_dk2 =( c_k1 - 2 * C0 + c_k2)/0.5**2
+        # dc by dk
+        K1 = K + dk  # e.g. exercise price = 40
 
-    local_vol = np.sqrt((dc_dt + r * C0 - (r - 0) * (
-                    C0 - K * dc_dk1)) / (0.5 * K * K * d2c_dk2))
+        MC = ExoticPricing(S0=S0,
+                           K=K1,
+                           T=T,
+                           r=r,
+                           sigma=sigma,
+                           simulation_rounds=simulation_rounds,
+                           npath=npath,
+                           fix_random_seed=2)
+        # MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+        # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+        MC.stock_price_simulation()
+        c_k1 = MC.barrier_option(option_type="call",
+                                 barrier_price=barrier_price,
+                                 barrier_type="knock-in",
+                                 barrier_direction="down",
+                                 parisian_barrier_days=parisian_barrier_days)[0]
+        dc_dk1 = (c_k1 - C0) / dk
+
+        K2 = K - dk  # e.g. exercise price = 40
+        T = T  # e.g. one year
+
+        MC = ExoticPricing(S0=S0,
+                           K=K2,
+                           T=T,
+                           r=r,
+                           sigma=sigma,
+                           simulation_rounds=simulation_rounds,
+                           npath=npath,
+                           fix_random_seed=501)
+        # MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+        # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+        MC.stock_price_simulation()
+        c_k2 = MC.barrier_option(option_type="call",
+                                 barrier_price=barrier_price,
+                                 barrier_type="knock-in",
+                                 barrier_direction="down",
+                                 parisian_barrier_days=parisian_barrier_days)[0]
+        d2c_dk2 = (c_k1 - 2 * C0 + c_k2) / dk ** 2
+
+        local_vol = np.sqrt((dc_dt + r * C0 - (r - 0) * (
+                C0 - K * dc_dk1)) / (0.5 * K * K * d2c_dk2))
+        return np.array([C0,local_vol])
+
+    true_path  = MC.price_array[:,np.random.randint(npath)]
+    n = 0
+    dt = 1/252
+    dk = 0.5
+    local_V = np.zeros([2,simulation_rounds])
+    for i in range(len(true_path)):
+        S = true_path[i]
+        T = T - n * (T/npath)
+        local_V[:,i]=local_vol(dt, dk, S, K, T, r, sigma, simulation_rounds, npath)
+        n += 1
+
+local_V[1,np.where(np.isnan(local_V))[1]] = np.interp(local_V[0,np.where(np.isnan(local_V))[1]],local_V[0],local_V[1])
+
+fig = plt.figure(figsize=(10,8))
+plt.subplot(211)
+plt.plot(true_path,label='stock price')
+
+plt.subplot(212)
+plt.plot(local_V[0],color = 'r',label = 'barrier opt price')
+plt.plot(local_V[1],color = 'orange',label = 'option local vol')
+
+lines = []
+labels = []
+for ax in fig.axes:
+    axLine, axLabel = ax.get_legend_handles_labels()
+    lines.extend(axLine)
+    labels.extend(axLabel)
+
+fig.legend(lines, labels,
+           loc = 'upper right')
+
+plt.show()
