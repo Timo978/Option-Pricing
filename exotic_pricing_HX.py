@@ -418,7 +418,6 @@ class ExoticPricing:
         plt.plot(self.price_array)
         plt.show()
 
-
 if __name__ == '__main__':
     # Test
     t = datetime.timestamp(datetime.strptime('20210603-00:00:00', "%Y%m%d-%H:%M:%S"))
@@ -446,9 +445,9 @@ if __name__ == '__main__':
                        fix_random_seed=2)
 
     # MC.vasicek_model(a=0.5, b=0.05, sigma_r=0.1)
-    # MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-    # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5) # heston方法中已经包含了价格生成过程
-    MC.stock_price_simulation()
+    MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+    MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5) # heston方法中已经包含了价格生成过程
+    # MC.stock_price_simulation()
 
     # barrier
     # barrier_price= 80.0
@@ -480,7 +479,7 @@ if __name__ == '__main__':
 
         # 计算每个时点的期权的价格
         barrier_price = 35 * 1.3
-        parisian_barrier_days = 21
+        parisian_barrier_days = 5
 
         MC = ExoticPricing(S0=S0,
                            K=K,
@@ -490,9 +489,9 @@ if __name__ == '__main__':
                            simulation_rounds=simulation_rounds,
                            npath=npath,
                            fix_random_seed=2)
-        # MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-        # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
-        MC.stock_price_simulation()
+        MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+        MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+        # MC.stock_price_simulation()
 
         C0 = MC.barrier_option(option_type="call",
                                barrier_price=barrier_price,
@@ -512,9 +511,9 @@ if __name__ == '__main__':
                            simulation_rounds=simulation_rounds,
                            npath=npath,
                            fix_random_seed=2)
-        # MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-        # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
-        MC.stock_price_simulation()
+        MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+        MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+        # MC.stock_price_simulation()
         c_t = MC.barrier_option(option_type="call",
                                 barrier_price=barrier_price,
                                 barrier_type="knock-in",
@@ -534,9 +533,9 @@ if __name__ == '__main__':
                            simulation_rounds=simulation_rounds,
                            npath=npath,
                            fix_random_seed=2)
-        # MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-        # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
-        MC.stock_price_simulation()
+        MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+        MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+        # MC.stock_price_simulation()
         c_k1 = MC.barrier_option(option_type="call",
                                  barrier_price=barrier_price,
                                  barrier_type="knock-in",
@@ -555,9 +554,9 @@ if __name__ == '__main__':
                            simulation_rounds=simulation_rounds,
                            npath=npath,
                            fix_random_seed=501)
-        # MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
-        # MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
-        MC.stock_price_simulation()
+        MC.CIR_model(a=0.5, b=0.05, sigma_r=0.1)
+        MC.heston(kappa=2, theta=0.3, sigma_v=0.3, rho=0.5)
+        # MC.stock_price_simulation()
         c_k2 = MC.barrier_option(option_type="call",
                                  barrier_price=barrier_price,
                                  barrier_type="knock-in",
@@ -580,24 +579,31 @@ if __name__ == '__main__':
         local_V[:,i]=local_vol(dt, dk, S, K, T, r, sigma, simulation_rounds, npath)
         n += 1
 
-local_V[1,np.where(np.isnan(local_V))[1]] = np.interp(local_V[0,np.where(np.isnan(local_V))[1]],local_V[0],local_V[1])
+    # local_V[1, np.where(np.isnan(local_V))[1]] = np.interp(local_V[0, np.where(np.isnan(local_V))[1]],local_V[0],local_V[1])
 
-fig = plt.figure(figsize=(10,8))
-plt.subplot(211)
-plt.plot(true_path,label='stock price')
+    fig = plt.figure(figsize=(10,8))
+    plt.subplot(311)
+    plt.plot(true_path,label='stock price')
 
-plt.subplot(212)
-plt.plot(local_V[0],color = 'r',label = 'barrier opt price')
-plt.plot(local_V[1],color = 'orange',label = 'option local vol')
+    plt.subplot(312)
+    plt.plot(local_V[0],color = 'r',label = 'barrier opt price')
 
-lines = []
-labels = []
-for ax in fig.axes:
-    axLine, axLabel = ax.get_legend_handles_labels()
-    lines.extend(axLine)
-    labels.extend(axLabel)
+    plt.subplot(313)
+    plt.plot(local_V[1],color = 'orange',label = 'option local vol')
 
-fig.legend(lines, labels,
+    lines = []
+    labels = []
+    for ax in fig.axes:
+        axLine, axLabel = ax.get_legend_handles_labels()
+        lines.extend(axLine)
+        labels.extend(axLabel)
+
+    fig.legend(lines, labels,
            loc = 'upper right')
 
-plt.show()
+    plt.show()
+
+    from scipy.interpolate import CubicSpline
+
+    cs = CubicSpline(sorted(local_V[0, ~np.isnan(local_V)[1]]), sorted(local_V[1, ~np.isnan(local_V)[1]]))
+    local_V[1, np.where(np.isnan(local_V))[1]] = cs(local_V[0, np.where(np.isnan(local_V))[1]])
