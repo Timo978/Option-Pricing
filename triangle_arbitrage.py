@@ -6,9 +6,6 @@ import time
 pd.set_option('expand_frame_repr', False)
 
 def main():
-    """
-        主函数
-    """
     # 初始化交易所
     okex_exchange = ccxt.okex({
         'Timeout': 15000,
@@ -40,7 +37,7 @@ def main():
 
     # 获取相同的基础货币列表
     common_base_list = list(set(base_a_list).intersection(set(base_b_list)))
-    # print('{} and {} have {}个相同的计价货币'.format(market_a, market_b, len(common_base_list)))
+    # print('{} and {} have {}个'.format(market_a, market_b, len(common_base_list)))
     # == Step.2 END =================
 
     # == Step.3 执行套利步骤

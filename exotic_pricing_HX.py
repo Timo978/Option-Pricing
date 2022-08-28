@@ -9,6 +9,7 @@ import numpy as np
 from datetime import datetime
 from typing import Tuple
 import matplotlib.pyplot as plt
+from scipy.interpolate import CubicSpline
 
 class ExoticPricing:
     def __init__(self, r, S0: float, K: float, T: float, sigma: float,
@@ -568,7 +569,9 @@ if __name__ == '__main__':
                 C0 - K * dc_dk1)) / (0.5 * K * K * d2c_dk2))
         return np.array([C0,local_vol])
 
-    true_path  = MC.price_array[:,np.random.randint(npath)]
+
+    true = np.random.randint(npath)
+    true_path  = MC.price_array[:,true]
     n = 0
     dt = 1/252
     dk = 0.5
@@ -579,8 +582,6 @@ if __name__ == '__main__':
         local_V[:,i]=local_vol(dt, dk, S, K, T, r, sigma, simulation_rounds, npath)
         n += 1
 
-    # local_V[1, np.where(np.isnan(local_V))[1]] = np.interp(local_V[0, np.where(np.isnan(local_V))[1]],local_V[0],local_V[1])
-
     fig = plt.figure(figsize=(10,8))
     plt.subplot(311)
     plt.plot(true_path,label='stock price')
@@ -590,6 +591,9 @@ if __name__ == '__main__':
 
     plt.subplot(313)
     plt.plot(local_V[1],color = 'orange',label = 'option local vol')
+
+    plt.subplot(313)
+    plt.plot(MC.sigma[:,true], color='blue', label='underlying sigma')
 
     lines = []
     labels = []
@@ -603,7 +607,6 @@ if __name__ == '__main__':
 
     plt.show()
 
-    from scipy.interpolate import CubicSpline
 
     cs = CubicSpline(sorted(local_V[0, ~np.isnan(local_V)[1]]), sorted(local_V[1, ~np.isnan(local_V)[1]]))
     local_V[1, np.where(np.isnan(local_V))[1]] = cs(local_V[0, np.where(np.isnan(local_V))[1]])
